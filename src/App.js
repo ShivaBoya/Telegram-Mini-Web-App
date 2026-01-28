@@ -139,12 +139,12 @@ import { BrowserRouter as Router, Route, Routes, Link, useLocation } from 'react
 import './App.css';
 import AdminTask from './pages/AdminTask';
 import AdminNews from './pages/AdminNews';
-import FarmingComponent from "./pages/FarmPage/FamingComponent";
+
 import NetworkComponent from './pages/NetworkPage/NetworkComponent';
 import GameComponent from './pages/GamePage/GameComponent';
 import NewsComponent from "./pages/NewsPage/NewsComponent"
 import WalletComponent from './pages/WalletPage/WalletComponent';
-import TaskComponent from './pages/TaskPage/TaskComponent';
+
 import HomeComponent from './pages/HomePage/HomeComponent';
 import { useTelegram } from "./reactContext/TelegramContext.js"
 import { initializeUser } from "./services/userManagement.js";
@@ -208,7 +208,6 @@ function App() {
 
   }, []);
   useEffect(() => {
-
     resetTasksIfNeeded(user.id)
   }, [user.id])
 

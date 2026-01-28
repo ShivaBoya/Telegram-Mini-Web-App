@@ -8,22 +8,24 @@ import { Progress } from "../../components/ui/progress.js";
 import { useTelegram } from "../../reactContext/TelegramContext";
 import { useNavigate } from "react-router-dom";
 import { database } from "../../services/FirebaseConfig";
-import { ref, onValue, update, get, runTransaction } from "firebase/database";
+import { ref, onValue, runTransaction, update } from "firebase/database";
 import { addHistoryLog } from "../../services/addHistory.js";
 
 const BOT_TOKEN = process.env.REACT_APP_BOT_TOKEN;
 export default function TasksPage() {
-  const [activeTab, setActiveTab] = useState("daily");
+
   const { user, scores } = useTelegram();
   const [tasks, setTasks] = useState([]);
   const [filterType, setFilterType] = useState("all");
   const navigate = useNavigate();
-  const [clicked, setClick] = useState({ watch: {}, social: false });
-  const [verify, setVerify] = useState("");
+
+
   const [buttonText, setButtonText] = useState({});
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [videoTimer, setVideoTimer] = useState(0);
+
   const [activeTaskId, setActiveTaskId] = useState(null);
+  const [click, setClick] = useState({});
 
   useEffect(() => {
     let interval;
@@ -34,7 +36,7 @@ export default function TasksPage() {
     }
     return () => clearInterval(interval);
   }, [selectedVideo, videoTimer]);
-  const [membershipStatus, setMembershipStatus] = useState(null);
+
   const [userTasks, setUserTasks] = useState({});
   const [gameCompleted, setGameCompleted] = useState(false);
   const [newsCount, setnewsCount] = useState(0);
@@ -159,7 +161,7 @@ export default function TasksPage() {
       unsubscribeScores();
       unsubscribeWeekly();
     };
-  }, [user.id]);
+  }, [user.id, userTasksRef, userScoreRef]);
 
   // Use localScores for real-time updates, fallback to context
   const scoreData = localScores || scores;
@@ -181,7 +183,7 @@ export default function TasksPage() {
   // Use `points` as primary reward â€” fallback to `score`, then 100
   // Updated Weekly Logic: Use 'current_week_days' from our new tracker
   const weeklyDaysCompleted = weeklyProgressData?.current_week_days || 0;
-  const weeklyPoints = weeklyDaysCompleted; // Map directly to progress (1 = 1 day, 7 = 7 days)
+
 
   const mapTask = (task) => {
     // Check points, then score, then default to 100
@@ -537,20 +539,6 @@ export default function TasksPage() {
           }
         }
         break;
-
-      default:
-        setClick({ watch: {}, social: false });
-    }
-  };
-
-  const handleVerification = (task, taskId) => {
-    const verifycode = `1234${taskId}`;
-    const verifyBlock = document.getElementById(`verifyblock-${taskId}`);
-    const clickBtn = document.getElementById(`clickBtn${taskId}`);
-    if (verifycode === verify + `${taskId}` && verify !== "") {
-      verifyBlock.style.display = "none";
-      clickBtn.style.display = "block";
-      update(userTasksRef, { [taskId]: false });
     }
   };
 
@@ -558,13 +546,7 @@ export default function TasksPage() {
     ? processedTasks
     : processedTasks.filter(task => task.type === filterType);
 
-  const handleRoute = (path) => {
-    if (path === "referral") {
-      navigate(`/network`);
-    } else {
-      navigate(`/${path}`);
-    }
-  };
+
 
   return (
     <div className="min-h-screen w-full flex flex-col bg-gradient-to-br from-indigo-600/90 via-purple-600/80 to-pink-600/90">
@@ -638,8 +620,6 @@ export default function TasksPage() {
                   onClick={() => {
                     if (["all", "watch", "social", "partnership", "misc"].includes(tab)) {
                       setFilterType(tab);
-                    } else {
-                      setActiveTab(tab);
                     }
                   }}
                 >

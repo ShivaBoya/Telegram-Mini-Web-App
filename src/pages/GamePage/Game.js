@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import { ref, get, update } from "firebase/database";
 import { database } from "../../services/FirebaseConfig";
 import { useTelegram } from "../../reactContext/TelegramContext.js";
@@ -783,6 +783,7 @@ const Game = ({ onGameOver, startGame }) => {
       clearInterval(bonusIntervalRef.current);
       clearTimeout(bonusTimeoutRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -806,9 +807,9 @@ const Game = ({ onGameOver, startGame }) => {
     if (startGame) {
       initGame();
     }
-  }, [startGame]);
+  }, [startGame, initGame]);
 
-  const initGame = async () => {
+  const initGame = useCallback(async () => {
     await fetchHighScoreWrapper();
     fruitsRef.current = [];
     scoreRef.current = 0;
@@ -835,7 +836,7 @@ const Game = ({ onGameOver, startGame }) => {
     spawnIntervalRef.current = setInterval(spawnFruit, 1500);
     goldenCoinIntervalRef.current = setInterval(spawnGoldenCoin, 25000);
     startTimer();
-  };
+  }, [fetchHighScoreWrapper]);
 
   // Inject pulse animation CSS.
   useEffect(() => {

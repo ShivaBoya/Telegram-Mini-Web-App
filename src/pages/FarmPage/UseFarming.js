@@ -1,12 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 import { get, update, ref } from "firebase/database";
-import { database } from "../../services/FirebaseConfig"; 
+import { database } from "../../services/FirebaseConfig";
 import { useTelegram } from "../../reactContext/TelegramContext.js";
-import {addHistoryLog} from "../../services/addHistory.js"
+import { addHistoryLog } from "../../services/addHistory.js"
 const FARMING_CONFIG = {
   duration: 43200, // Total farming time in seconds
-  pointsPerSecond:  100 / 3600, // Points earned per second
+  pointsPerSecond: 100 / 3600, // Points earned per second
   // duration: 5, // Total farming time in seconds
   // pointsPerSecond:  100 / 5, // Points earned per second
 };
@@ -19,28 +19,11 @@ const useFarming = () => {
     pointsEarned: 0,
   });
 
-  useEffect(() => {
-    const storedStart = localStorage.getItem("farmingStartTime");
-    const storedCompleted = localStorage.getItem("farmingCompleted");
-    
-    if (storedStart) {
-      resumeTimer(parseInt(storedStart, 10));
-    } else if (storedCompleted) {
-      const completedData = JSON.parse(storedCompleted);
-      setFarmingState({
-        isFarming: false,
-        canClaim: true,
-        remainingTime: 0,
-        pointsEarned: completedData.pointsEarned,
-      });
-    }
+  const updateUI = useCallback((newState) => {
+    setFarmingState((prev) => ({ ...prev, ...newState }));
   }, []);
 
-  const updateUI = (newState) => {
-    setFarmingState((prevState) => ({ ...prevState, ...newState }));
-  };
-
-  const resumeTimer = (startTime) => {
+  const resumeTimer = useCallback((startTime) => {
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
     if (elapsed < FARMING_CONFIG.duration) {
       const remainingTime = FARMING_CONFIG.duration - elapsed;
@@ -74,7 +57,24 @@ const useFarming = () => {
         pointsEarned: FARMING_CONFIG.duration * FARMING_CONFIG.pointsPerSecond,
       });
     }
-  };
+  }, [updateUI]);
+
+  useEffect(() => {
+    const storedStart = localStorage.getItem("farmingStartTime");
+    const storedCompleted = localStorage.getItem("farmingCompleted");
+
+    if (storedStart) {
+      resumeTimer(parseInt(storedStart, 10));
+    } else if (storedCompleted) {
+      const completedData = JSON.parse(storedCompleted);
+      setFarmingState({
+        isFarming: false,
+        canClaim: true,
+        remainingTime: 0,
+        pointsEarned: completedData.pointsEarned,
+      });
+    }
+  }, [resumeTimer]);
 
   const startFarming = () => {
     localStorage.removeItem("farmingCompleted");
@@ -101,9 +101,9 @@ const useFarming = () => {
       });
     }, 1000);
   };
-  const {user} = useTelegram()
+  const { user } = useTelegram()
   const claimPoints = async () => {
-    
+
     if (!farmingState.canClaim) return;
     try {
       const scoreRef = ref(database, `users/${user.id}/Score`);
@@ -116,13 +116,13 @@ const useFarming = () => {
         farming_score: newFarmingScore,
         total_score: newTotalScore,
       });
-      const textData ={
-              action: 'Farming Claimed',
-              points: 1200,
-              type: 'Farming',
-            }
-      
-      addHistoryLog(user.id,textData)
+      const textData = {
+        action: 'Farming Claimed',
+        points: 1200,
+        type: 'Farming',
+      }
+
+      addHistoryLog(user.id, textData)
       resetFarming();
     } catch (error) {
       console.error("Error claiming points:", error);

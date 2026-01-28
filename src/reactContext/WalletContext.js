@@ -97,7 +97,7 @@ export const WalletProvider = ({ children }) => {
     };
 
     initializeTonConnect();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Save state to localStorage
   useEffect(() => {

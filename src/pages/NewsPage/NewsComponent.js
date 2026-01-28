@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import {
-  Award,
   Zap,
   ThumbsUp,
   ThumbsDown,
