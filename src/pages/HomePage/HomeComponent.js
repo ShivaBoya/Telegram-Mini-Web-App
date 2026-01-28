@@ -566,28 +566,51 @@ export default function HomeComponent() {
     {
       id: 1,
       title: "TON Blockchain Adoption Surges Among Developers",
-      summary: "The Open Network (TON) is seeing a massive influx of developers building Mini Apps.",
-      category: "Blockchain",
-      readTime: "2 min",
-      imageUrl: "https://cryptologos.cc/logos/toncoin-ton-logo.png"
+      summary:
+        "The Open Network (TON) is seeing unprecedented growth in developer activity as more applications are being built on the blockchain.",
+      category: "Development",
+      imageUrl: "https://i.postimg.cc/sDzjfdS0/Ton-Image.jpg",
+      readTime: "4 min",
     },
     {
       id: 2,
-      title: "Telegram Mini Apps: The Future of Web3 Gaming?",
-      summary: "With seamless integration, Telegram is becoming a hub for casual crypto games.",
-      category: "Gaming",
+      title: "Ethereum Layer 2 Solutions See Record Growth",
+      summary:
+        "Layer 2 scaling solutions on Ethereum have reached an all-time high in total value locked, with Arbitrum and Optimism leading the charge.",
+      category: "Blockchain",
+      imageUrl:
+        "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/StockCake-Ethereum%27s%20Digital%20Glow_1742209026.jpg-5LEdYRUDNMmXP3kO8VQLYl4bo7nnTL.jpeg",
       readTime: "3 min",
-      imageUrl: "https://telegram.org/file/464001908/1/bI7_v8t8_88.204595/29a070f3f38011c79f"
     },
     {
       id: 3,
-      title: "New Airdrop Opportunities on TON Ecosystem",
-      summary: "Several new projects are launching airdrops for early adopters on TON.",
-      category: "Airdrops",
-      readTime: "1 min",
-      imageUrl: "https://ton.org/download/ton_symbol.png"
-    }
-  ];
+      title: "New NFT Collection Raises $10M for Charity",
+      summary:
+        "A new NFT collection featuring digital art from renowned artists has raised over $10 million for environmental conservation efforts.",
+      category: "NFTs",
+      imageUrl: "https://i.postimg.cc/59XXZV1c/NFT-Image.jpg",
+      readTime: "2 min",
+    },
+
+    {
+      id: 4,
+      title: "Bitcoin Mining Becomes More Sustainable",
+      summary:
+        "Major Bitcoin mining operations are transitioning to renewable energy sources, addressing environmental concerns about cryptocurrency mining.",
+      category: "Sustainability",
+      imageUrl: "https://i.postimg.cc/DyGXHThj/Bit-Coin-Image.jpg",
+      readTime: "5 min",
+    },
+    {
+      id: 5,
+      title: "DeFi Protocol Launches Cross-Chain Bridge",
+      summary:
+        "A popular DeFi protocol has launched a new cross-chain bridge allowing users to transfer assets between multiple blockchains with minimal fees.",
+      category: "DeFi",
+      imageUrl: "https://i.postimg.cc/kM0shCzG/Defi-Image.jpg",
+      readTime: "3 min",
+    },
+  ]
 
   useEffect(() => {
     const tasksRef = ref(database, "tasks");
