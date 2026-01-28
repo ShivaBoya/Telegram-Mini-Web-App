@@ -78,8 +78,8 @@ export default function TasksPage() {
       const currentVideoUrl = task.videoUrl || task.url;
       // If we have a claimed status record
       if (status && typeof status === 'object' && status.videoUrl) {
-         // If the video URL has changed since we claimed it, it's NOT done (User can watch again)
-         if (status.videoUrl !== currentVideoUrl) return false;
+        // If the video URL has changed since we claimed it, it's NOT done (User can watch again)
+        if (status.videoUrl !== currentVideoUrl) return false;
       }
       // Legacy handling or standard boolean status
       return !!status;
@@ -110,12 +110,12 @@ export default function TasksPage() {
       if (snapshot.exists()) {
         const data = snapshot.val();
         const tasksArray = Object.entries(data).flatMap(([category, categoryTasks]) => {
-            if (!categoryTasks || typeof categoryTasks !== 'object') return [];
-            return Object.entries(categoryTasks).map(([key, task]) => ({
-                ...task,
-                id: task.id || key, // Ensure ID exists
-                category: task.category || category // Fallback to folder name if category property is missing
-            }));
+          if (!categoryTasks || typeof categoryTasks !== 'object') return [];
+          return Object.entries(categoryTasks).map(([key, task]) => ({
+            ...task,
+            id: task.id || key, // Ensure ID exists
+            category: task.category || category // Fallback to folder name if category property is missing
+          }));
         });
         setTasks(tasksArray);
       } else {
@@ -143,12 +143,12 @@ export default function TasksPage() {
 
     const weeklyProgressRef = ref(database, `users/${user.id}/weekly_progress`);
     const unsubscribeWeekly = onValue(weeklyProgressRef, (snapshot) => {
-        if (snapshot.exists()) {
-             // Map this to a local state if needed, or we just rely on it updating 'scores' if we put it there?
-             // Actually, we calculate 'weeklyPoints' later. Ideally we just store this data.
-             // Let's assume we might need a state for it.
-             setWeeklyProgressData(snapshot.val());
-        }
+      if (snapshot.exists()) {
+        // Map this to a local state if needed, or we just rely on it updating 'scores' if we put it there?
+        // Actually, we calculate 'weeklyPoints' later. Ideally we just store this data.
+        // Let's assume we might need a state for it.
+        setWeeklyProgressData(snapshot.val());
+      }
     });
 
     return () => {
@@ -217,14 +217,11 @@ export default function TasksPage() {
     };
   };
 
-  const processedTasks = tasks.map(mapTask).filter(task => 
-    !(isTaskDone(task) && !['partnership', 'social', 'watch'].includes(task.type))
-  );
+  const processedTasks = tasks.map(mapTask);
 
   const dailyTasks = processedTasks.filter(
-    (task) => (task.category === 'daily' || task.category === 'standard' || (!task.category && !['weekly', 'achievements'].includes(task.type))) 
-              && task.type !== 'social'
-              && !(task.type === 'watch' && isTaskDone(task)) // Hide completed watch tasks from daily
+    (task) => (task.category === 'daily' || task.category === 'standard' || (!task.category && !['weekly', 'achievements'].includes(task.type)))
+      && task.type !== 'social'
   );
   const weeklyTasks = processedTasks.filter(task => task.category === 'weekly');
   const achievements = processedTasks.filter(task => task.category === 'achievements');
@@ -310,12 +307,12 @@ export default function TasksPage() {
   const handleTitle = async (task, taskId) => {
     const clickBtn = document.getElementById(`clickBtn${taskId}`);
     const currentText = buttonText[taskId] || "Start Task";
-    
+
     // UI Feedback Helper
     const setBtnLoading = () => setButtonText(prev => ({ ...prev, [taskId]: "Processing..." }));
     const setBtnFailed = () => {
-       setButtonText(prev => ({ ...prev, [taskId]: "Failed" }));
-       setTimeout(() => setButtonText(prev => ({ ...prev, [taskId]: "Try Again" })), 2000);
+      setButtonText(prev => ({ ...prev, [taskId]: "Failed" }));
+      setTimeout(() => setButtonText(prev => ({ ...prev, [taskId]: "Try Again" })), 2000);
     };
 
     // --- SHARED CLAIM LOGIC START ---
@@ -323,132 +320,132 @@ export default function TasksPage() {
       setBtnLoading();
       try {
         const taskPoints = Number(taskObj.points) || 0;
-        
+
         // 1. Transactional Score Update (Prevents Race Conditions)
         const scoreTransactionResult = await runTransaction(userScoreRef, (currentScoreData) => {
-           if (!currentScoreData) {
-             return {
-               task_score: taskPoints,
-               total_score: taskPoints,
-               weekly_points: taskPoints,
-               weekly_updated_at: Date.now(),
-               task_updated_at: Date.now(),
-               farming_score: 0, game_score: 0, network_score: 0, news_score: 0
-             };
-           }
-           
-           // Calculate new totals safely
-           const new_task_score = (Number(currentScoreData.task_score) || 0) + taskPoints;
-           const new_total_score = (
-               (Number(currentScoreData.farming_score) || 0) +
-               (Number(currentScoreData.game_score) || 0) +
-               (Number(currentScoreData.network_score) || 0) +
-               (Number(currentScoreData.news_score) || 0) +
-               new_task_score
-           );
+          if (!currentScoreData) {
+            return {
+              task_score: taskPoints,
+              total_score: taskPoints,
+              weekly_points: taskPoints,
+              weekly_updated_at: Date.now(),
+              task_updated_at: Date.now(),
+              farming_score: 0, game_score: 0, network_score: 0, news_score: 0
+            };
+          }
 
-           // Weekly Points Logic (with Reset)
-           let new_weekly_points = (Number(currentScoreData.weekly_points) || 0);
-           if (isSameWeek(currentScoreData.weekly_updated_at)) {
-               new_weekly_points += taskPoints;
-           } else {
-               new_weekly_points = taskPoints; // Reset for new week
-           }
+          // Calculate new totals safely
+          const new_task_score = (Number(currentScoreData.task_score) || 0) + taskPoints;
+          const new_total_score = (
+            (Number(currentScoreData.farming_score) || 0) +
+            (Number(currentScoreData.game_score) || 0) +
+            (Number(currentScoreData.network_score) || 0) +
+            (Number(currentScoreData.news_score) || 0) +
+            new_task_score
+          );
 
-           return {
-             ...currentScoreData,
-             task_score: new_task_score,
-             total_score: new_total_score,
-             weekly_points: new_weekly_points,
-             weekly_updated_at: Date.now(), // Always update timestamp to keep it fresh
-             task_updated_at: Date.now()
-           };
+          // Weekly Points Logic (with Reset)
+          let new_weekly_points = (Number(currentScoreData.weekly_points) || 0);
+          if (isSameWeek(currentScoreData.weekly_updated_at)) {
+            new_weekly_points += taskPoints;
+          } else {
+            new_weekly_points = taskPoints; // Reset for new week
+          }
+
+          return {
+            ...currentScoreData,
+            task_score: new_task_score,
+            total_score: new_total_score,
+            weekly_points: new_weekly_points,
+            weekly_updated_at: Date.now(), // Always update timestamp to keep it fresh
+            task_updated_at: Date.now()
+          };
         });
 
         if (scoreTransactionResult.committed) {
-             // 2. Update Task Status (Atomic per user action)
-             // Store specific data like videoUrl to handle Admin updates
-             const claimData = {
-               lastClaimed: Date.now(),
-               ...extraData
-             };
-             
-             await update(ref(database, `connections/${user.id}/${taskId}`), claimData);
+          // 2. Update Task Status (Atomic per user action)
+          // Store specific data like videoUrl to handle Admin updates
+          const claimData = {
+            lastClaimed: Date.now(),
+            ...extraData
+          };
 
-             // Reset game task completed status after claiming to ensure daily cycle works properly
-             if (taskObj.type === 'game') {
-                await update(ref(database, `connections/${user.id}/tasks/daily`), { game: false });
-             }
+          await update(ref(database, `connections/${user.id}/${taskId}`), claimData);
 
-             // 3. Weekly Progress Logic
-             // Check if this was a Daily Task and if we finished the day
-             if (taskObj.category === 'daily' || taskObj.type === 'news' || taskObj.type === 'game' || taskObj.type === 'watch') {
-                 // Optimization: We verify client-side first to avoid spamming transactions
-                 // Filter *all* daily tasks from our local 'tasks' state
-                 const currentDailyTasks = tasks.filter(t => 
-                    (t.category === 'daily') || 
-                    (t.type === 'game') || 
-                    (t.type === 'news')
-                 );
-                 
-                 // Check if ALL are done (including the one we just claimed)
-                 // We pass the new status for *this* task explicitly to the checker helper logic or just rely on 'userTasks' locally updated?
-                 // React state 'userTasks' won't be updated yet. We need to be careful.
-                 const allDone = currentDailyTasks.every(t => {
-                    if (t.id === taskId) return true; // Optimistically assume this one is done
-                    return isTaskDone(t);
-                 });
+          // Reset game task completed status after claiming to ensure daily cycle works properly
+          if (taskObj.type === 'game') {
+            await update(ref(database, `connections/${user.id}/tasks/daily`), { game: false });
+          }
 
-                 if (allDone) {
-                     // Check and increment weekly progress transactionally
-                     const weeklyRef = ref(database, `users/${user.id}/weekly_progress`);
-                     await runTransaction(weeklyRef, (currentWeekly) => {
-                         const now = new Date();
-                         // Simple date string for unique day check
-                         const todayStr = now.toISOString().split('T')[0];
-                         
-                         if (!currentWeekly) {
-                             return { current_week_days: 1, last_completed_date: todayStr };
-                         }
+          // 3. Weekly Progress Logic
+          // Check if this was a Daily Task and if we finished the day
+          if (taskObj.category === 'daily' || taskObj.type === 'news' || taskObj.type === 'game' || taskObj.type === 'watch') {
+            // Optimization: We verify client-side first to avoid spamming transactions
+            // Filter *all* daily tasks from our local 'tasks' state
+            const currentDailyTasks = tasks.filter(t =>
+              (t.category === 'daily') ||
+              (t.type === 'game') ||
+              (t.type === 'news')
+            );
 
-                         // If already incremented for today, ignore
-                         if (currentWeekly.last_completed_date === todayStr) {
-                             return currentWeekly; // No change
-                         }
+            // Check if ALL are done (including the one we just claimed)
+            // We pass the new status for *this* task explicitly to the checker helper logic or just rely on 'userTasks' locally updated?
+            // React state 'userTasks' won't be updated yet. We need to be careful.
+            const allDone = currentDailyTasks.every(t => {
+              if (t.id === taskId) return true; // Optimistically assume this one is done
+              return isTaskDone(t);
+            });
 
-                         // Check for Week Reset
-                         // If the last completion was NOT in the same week, reset count to 1
-                         // Note: We use 'last_completed_date' as the reference point
-                         let newDays;
-                         if (isSameWeek(currentWeekly.last_completed_date)) {
-                            newDays = (currentWeekly.current_week_days || 0) + 1;
-                         } else {
-                            newDays = 1; // New Week -> First day completed
-                         }
-                         
-                         return {
-                             ...currentWeekly,
-                             current_week_days: Math.min(newDays, 7),
-                             last_completed_date: todayStr
-                         };
-                     });
-                 }
-             }
+            if (allDone) {
+              // Check and increment weekly progress transactionally
+              const weeklyRef = ref(database, `users/${user.id}/weekly_progress`);
+              await runTransaction(weeklyRef, (currentWeekly) => {
+                const now = new Date();
+                // Simple date string for unique day check
+                const todayStr = now.toISOString().split('T')[0];
 
-             // History Log
-             addHistoryLog(userId, {
-               action: `Task Reward: ${taskObj.title}`,
-               points: taskPoints,
-               type: taskObj.type || 'task',
-             });
-             
-             if(clickBtn) clickBtn.style.display = "none";
+                if (!currentWeekly) {
+                  return { current_week_days: 1, last_completed_date: todayStr };
+                }
+
+                // If already incremented for today, ignore
+                if (currentWeekly.last_completed_date === todayStr) {
+                  return currentWeekly; // No change
+                }
+
+                // Check for Week Reset
+                // If the last completion was NOT in the same week, reset count to 1
+                // Note: We use 'last_completed_date' as the reference point
+                let newDays;
+                if (isSameWeek(currentWeekly.last_completed_date)) {
+                  newDays = (currentWeekly.current_week_days || 0) + 1;
+                } else {
+                  newDays = 1; // New Week -> First day completed
+                }
+
+                return {
+                  ...currentWeekly,
+                  current_week_days: Math.min(newDays, 7),
+                  last_completed_date: todayStr
+                };
+              });
+            }
+          }
+
+          // History Log
+          addHistoryLog(userId, {
+            action: `Task Reward: ${taskObj.title}`,
+            points: taskPoints,
+            type: taskObj.type || 'task',
+          });
+
+          if (clickBtn) clickBtn.style.display = "none";
         } else {
-             throw new Error("Transaction failed");
+          throw new Error("Transaction failed");
         }
       } catch (error) {
-         console.error("Claim Error:", error);
-         setBtnFailed();
+        console.error("Claim Error:", error);
+        setBtnFailed();
       }
     };
     // --- SHARED CLAIM LOGIC END ---
@@ -459,16 +456,16 @@ export default function TasksPage() {
         // Status check: If not done OR text is "Start Task"/"Join Again"
         // Also if we have a mismatch videoUrl, isTaskDone returns false, so we enter here.
         if (["Start Task", "Join Again"].includes(currentText) && !isTaskDone(task)) {
-            // Open Video Modal
-            const videoUrl = task.videoUrl || task.url;
-            if (videoUrl) {
-              setSelectedVideo(videoUrl);
-              setVideoTimer(30); 
-              setActiveTaskId(taskId);
-            }
+          // Open Video Modal
+          const videoUrl = task.videoUrl || task.url;
+          if (videoUrl) {
+            setSelectedVideo(videoUrl);
+            setVideoTimer(30);
+            setActiveTaskId(taskId);
+          }
         } else if (!isTaskDone(task) || currentText === "Claim") {
-             // Pass videoUrl to be stored in the claim record
-             executeClaim(task, { videoUrl: task.videoUrl || task.url });
+          // Pass videoUrl to be stored in the claim record
+          executeClaim(task, { videoUrl: task.videoUrl || task.url });
         }
         break;
 
@@ -480,7 +477,7 @@ export default function TasksPage() {
           const { chatId, chatType } = await handleChatId();
           startMembershipCheck(taskId, chatId, chatType);
         } else if (currentText === "Claim" && !isTaskDone(task)) {
-             executeClaim(task);
+          executeClaim(task);
         }
         break;
 
@@ -495,49 +492,49 @@ export default function TasksPage() {
       case "game":
         // Check if game is completed or explicitly ready to claim
         if (gameCompleted || (userTasks[taskId] === false) || currentText === "Claim") {
-             executeClaim(task);
+          executeClaim(task);
         } else {
-           navigate("/game");
+          navigate("/game");
         }
         break;
 
       case "news":
         if (!isTaskDone(task) || currentText === "Claim") {
-           if (newsCount < 5) {
-             navigate("/news");
-             return;
-           }
-           executeClaim(task);
+          if (newsCount < 5) {
+            navigate("/news");
+            return;
+          }
+          executeClaim(task);
         } else {
-           navigate("/news");
-           if (newsCount >= 5) {
-              // Local UI update to enable claim if we just returned
-              update(userTasksRef, { [taskId]: false }); 
-              setButtonText(prev => ({ ...prev, [taskId]: "Claim" }));
-           }
+          navigate("/news");
+          if (newsCount >= 5) {
+            // Local UI update to enable claim if we just returned
+            update(userTasksRef, { [taskId]: false });
+            setButtonText(prev => ({ ...prev, [taskId]: "Claim" }));
+          }
         }
         break;
-        
+
       case "weekly":
         // Logic for Weekly Claim
         if (!isTaskDone(task)) {
-           // Verify completion requirement using the mapped 'completed' value
-           // task.completed is set in mapTask
-           if (task.completed >= task.total) {
-               executeClaim(task);
-           } else {
-               // Optional: Visual feedback that it's not ready
-               const updatedButtonTexts = { ...buttonText };
-               updatedButtonTexts[taskId] = "In Progress";
-               setButtonText(updatedButtonTexts);
-               setTimeout(() => {
-                   setButtonText(prev => {
-                       const next = { ...prev };
-                       delete next[taskId]; // Reset to default
-                       return next;
-                   });
-               }, 1000);
-           }
+          // Verify completion requirement using the mapped 'completed' value
+          // task.completed is set in mapTask
+          if (task.completed >= task.total) {
+            executeClaim(task);
+          } else {
+            // Optional: Visual feedback that it's not ready
+            const updatedButtonTexts = { ...buttonText };
+            updatedButtonTexts[taskId] = "In Progress";
+            setButtonText(updatedButtonTexts);
+            setTimeout(() => {
+              setButtonText(prev => {
+                const next = { ...prev };
+                delete next[taskId]; // Reset to default
+                return next;
+              });
+            }, 1000);
+          }
         }
         break;
 
@@ -678,11 +675,11 @@ export default function TasksPage() {
                               {isTaskDone(task)
                                 ? (task.type === 'partnership' || task.type === 'social' ? "Open" : "Done")
                                 : (
-                                    (userTasks[task.id] === false && (task.type !== 'news' || newsCount >= 5)) || 
-                                    (task.type === 'weekly' && task.completed >= task.total) 
-                                    ? "Claim" 
+                                  (userTasks[task.id] === false && (task.type !== 'news' || newsCount >= 5)) ||
+                                    (task.type === 'weekly' && task.completed >= task.total)
+                                    ? "Claim"
                                     : buttonText[task.id] || "Start Task"
-                                  )
+                                )
                               }
                             </button>
                           </div>
@@ -788,10 +785,10 @@ export default function TasksPage() {
                                   ? (task.type === 'partnership' || task.type === 'social' ? "Open" : "Done")
                                   : (
                                     (userTasks[taskId] === false) ||
-                                    (task.type === 'weekly' && task.completed >= task.total) ||
-                                    (task.type === 'game' && gameCompleted)
-                                    ? "Claim" 
-                                    : buttonText[taskId] || "Start Task"
+                                      (task.type === 'weekly' && task.completed >= task.total) ||
+                                      (task.type === 'game' && gameCompleted)
+                                      ? "Claim"
+                                      : buttonText[taskId] || "Start Task"
                                   )
                                 }
                               </button>
