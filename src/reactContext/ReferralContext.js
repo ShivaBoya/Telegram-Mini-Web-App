@@ -1,309 +1,154 @@
+// src/reactContext/ReferralContext.js
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useTelegram } from './TelegramContext.js';
 import { database } from '../services/FirebaseConfig.js';
-import { ref, get, update, onValue, runTransaction } from 'firebase/database';
-import { BOT_USERNAME, isBotConfigValid } from '../config/botConfig';
+import { ref, get, update, set, onValue } from 'firebase/database';
 
 const ReferralContext = createContext();
 export const useReferral = () => useContext(ReferralContext);
 
 export const ReferralProvider = ({ children }) => {
   const { user } = useTelegram();
+
   const [inviteLink, setInviteLink] = useState('');
   const [invitedFriends, setInvitedFriends] = useState([]);
   const [showWelcomePopup, setShowWelcomePopup] = useState(false);
-  const [referralError, setReferralError] = useState(null);
-  const [isProcessing, setIsProcessing] = useState(false);
 
-  // ENV Variable for Bot Username - Source of Truth
-  // Imported from ../config/botConfig
+  // DB updates - wrapped in useCallback
+  const updateScores = React.useCallback(async (refId, amount) => {
+    // Update network_score
+    const scoreRef = ref(database, `users/${refId}/Score/network_score`);
+    const snap = await get(scoreRef);
+    const curr = snap.exists() ? snap.val() : 0;
+    await set(scoreRef, curr + amount);
 
-  // 1. Parse Start Param & Handle New Referrals
+    // Update total_score
+    const totalRef = ref(database, `users/${refId}/Score/total_score`);
+    const totalSnap = await get(totalRef);
+    const tot = totalSnap.exists() ? totalSnap.val() : 0;
+    await set(totalRef, tot + amount);
+  }, []);
+
+  const addReferralRecord = React.useCallback(async (referrerId, referredId) => {
+    const referrerUserRef = ref(database, `users/${referrerId}`);
+    const userSnap = await get(referrerUserRef);
+
+    if (!userSnap.exists()) {
+      await set(referrerUserRef, {
+        referrals: {}
+      });
+    }
+    // Add to referrer list and award
+    const refRef = ref(database, `users/${referrerId}/referrals`);
+    const snap = await get(refRef);
+    const list = snap.val() || {};
+    const exists = Object.values(list).includes(referredId);
+    if (exists) return;
+    const idx = Object.keys(list).length + 1;
+    await update(refRef, { [idx]: referredId });
+
+    // Award: referrer 100, referred 50
+    await updateScores(referrerId, 100);
+    await updateScores(referredId, 50);
+  }, [updateScores]);
+
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
-    if (!tg) return;
+    if (!tg) {
+      console.log('[Referral] Telegram object not found');
+      return;
+    }
+
     tg.ready();
+    console.log('[Referral] tg.ready() was called');
 
-    const initReferral = async () => {
-      const startParam = tg.initDataUnsafe?.start_param;
-      const currentUserId = tg.initDataUnsafe?.user?.id;
+    const startParam = tg.initDataUnsafe?.start_param;
+    const referredId = tg.initDataUnsafe?.user?.id;
 
-      if (!startParam || !currentUserId || isProcessing) return;
+    if (!startParam || !referredId) {
+      return;
+    }
 
-      // Expected format: ref_CODE_REFERRERID
-      const parts = startParam.split('_');
-      // parts[0] = 'ref', parts[1] = code, parts[2] = referrerId
-      const referrerId = parts[2];
+    /* last "_" split */
+    const parts = startParam.split('_');
+    const referrerId = parts[2];
+    console.log('[Referral] referrerId:', referrerId);
 
-      // Basic Validation
-      if (!referrerId || String(referrerId) === String(currentUserId)) {
-        return; 
-      }
+    if (!referrerId || referrerId === String(referredId)) {
+      return;
+    }
 
-      // LocalStorage Optimization (Client-side Check)
-      const key = `referral_processed_${currentUserId}`;
-      if (localStorage.getItem(key)) {
-        return; 
-      }
+    const key = `referred_${referredId}`;
+    if (localStorage.getItem(key)) {
+      console.log('[Referral] LocalStorage flag already set → abort');
+      return;
+    }
 
-      setIsProcessing(true);
-      
-      try {
-        await processReferral(referrerId, currentUserId, user);
+    console.log('[Referral] All guards passed – calling addReferralRecord');
+    addReferralRecord(referrerId, referredId)
+      .then(() => {
+        console.log('[Referral] addReferralRecord resolved – show popup');
         localStorage.setItem(key, 'done');
-        setShowWelcomePopup(true);
-      } catch (error) {
-        console.error("Referral processing failed:", error);
-      } finally {
-        setIsProcessing(false);
-      }
-    };
+        setShowWelcomePopup(true)
+      })
+      .catch(err => {
+        console.error('[Referral] addReferralRecord rejected:', err);
+        tg.showAlert('Could not save referral, please try again later.');
+      });
 
-    initReferral();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]); // Run once when user loads
+  }, [user.id, addReferralRecord]);
 
-  // 2. Atomic Transaction for Referral Recording
-  // 2. Atomic Transaction for Referral Recording
-  const processReferral = async (referrerId, newUserId, currentUserData) => {
-    const referrerRef = ref(database, `users/${referrerId}`);
-    
-    // Helper to recalculate total score from components
-    const calculateTotal = (scores) => {
-       return (scores.farming_score || 0) + 
-              (scores.network_score || 0) + 
-              (scores.game_score || 0) + 
-              (scores.task_score || 0) + 
-              (scores.news_score || 0);
-    };
 
-    // A. Transaction on Referrer's User Object
-    await runTransaction(referrerRef, (referrerData) => {
-      if (!referrerData) return referrerData; // Referrer must exist
 
-      if (!referrerData.referrals) referrerData.referrals = {};
-      
-      // Idempotency: Check if this specific user ID is already in the referral map
-      if (referrerData.referrals[newUserId]) {
-        return; // Already referred this user
-      }
 
-      // 1. Add Rich Referral Data (Single Source of Truth)
-      referrerData.referrals[newUserId] = {
-         id: newUserId,
-         id: newUserId,
-         name: currentUserData?.username ? `@${currentUserData.username}` : (currentUserData?.displayName || "Anonymous"), // Prefer Handle
-         joinTimestamp: Date.now(),
-         status: 'active',
-         currentStreak: 1 // Default for new user
-      };
-
-      // 2. Atomic Score Update (Self-Healing)
-      if (!referrerData.Score) referrerData.Score = {};
-      
-      // Update Network Component
-      referrerData.Score.network_score = (referrerData.Score.network_score || 0) + 100;
-      
-      // Recalculate Total to ensure consistency
-      referrerData.Score.total_score = calculateTotal(referrerData.Score);
-
-      return referrerData;
-    });
-
-    // B. Transaction on New User's Object (The Referee)
-    const newUserRef = ref(database, `users/${newUserId}`);
-    await runTransaction(newUserRef, (userData) => {
-      // Case 1: User does not exist yet (Race Condition Fix)
-      if (!userData) {
-          const initialScores = {
-              network_score: 50, // Bonus
-              total_score: 50,   // Bonus
-              farming_score: 0,
-              game_score: 0,
-              task_score: 0,
-              news_score: 0,
-              game_highest_score: 0,
-              no_of_tickets: 3
-          };
-          
-          return {
-            name: currentUserData?.username ? `@${currentUserData.username}` : (currentUserData?.displayName || "Anonymous"),
-            isReferred: true,
-            referredBy: referrerId,
-            Score: initialScores,
-            // Add other defaults
-            lastUpdated: Date.now(),
-            lastPlayed: Date.now(),
-            streak: { currentStreakCount: 1, lastStreakCheckDateUTC: new Date().toISOString().split('T')[0] }
-          };
-      }
-
-      // Case 2: User already exists
-      if (userData.isReferred) return; // Prevent double-dipping
-
-      if (!userData.Score) userData.Score = {};
-      
-      // Update Network Component
-      userData.Score.network_score = (userData.Score.network_score || 0) + 50;
-      
-      // Recalculate Total
-      userData.Score.total_score = calculateTotal(userData.Score);
-      
-      userData.isReferred = true; // Mark as referred
-      userData.referredBy = referrerId;
-
-      return userData;
-    });
-  };
-
-  // 3. Generate Environement-Aware Invite Link
   useEffect(() => {
-    // START VALIDATION: Check Config Validity
-    if (!isBotConfigValid) {
-       console.error("Referral Error: BOT_USERNAME is invalid or missing in configuration.");
-       setInviteLink(null);
-       setReferralError("Bot Configuration Missing");
-       return;
+    if (user?.id) {
+      const code = btoa(`${user.id}_${Date.now()}`)
+        .replace(/[^a-zA-Z0-9]/g, '')
+        .substring(0, 12);
+      setInviteLink(`https://t.me/Web3TodayGameAppTelegram_bot?startapp=ref_${code}_${user.id}`);
     }
+  }, [user?.id]);
 
-    // Check User Auth
-    if (!user?.id) {
-       // Only log if we expect a user (not pure web test)
-       // console.warn("Referral: Waiting for User ID...");
-       setInviteLink(null);
-       // We don't set error here, as it might just be loading
-       return;
-    }
 
-    // Use timestamp to make the code unique if needed, or simple ID structure
-    // Format: ref_{UniqueCode}_{UserId}
-    const uniqueCode = btoa(`${user.id}_${Date.now()}`).replace(/[^a-zA-Z0-9]/g, '').substring(0, 8);
-    
-    // CONSTRUCT LINK USING VALIDATED CONSTANT
-    const link = `https://t.me/${BOT_USERNAME}?startapp=ref_${uniqueCode}_${user.id}`;
-    setInviteLink(link);
-    setReferralError(null);
-  }, [user?.id]); // BOT_USERNAME/isBotConfigValid are constants
 
-  // 4. Fetch Invited Friends List (Real-time and Rich)
   useEffect(() => {
     if (!user?.id) return;
     const referralsRef = ref(database, `users/${user.id}/referrals`);
-    
-    // We listen to the referrals node.
-    // It now contains: { "USER_ID": { name: "...", timestamp: ... }, ... }
-    const unsubscribe = onValue(referralsRef, async (snapshot) => {
+    const unsub = onValue(referralsRef, async snapshot => {
       const data = snapshot.val() || {};
-      const referralEntries = Object.values(data); // These are the objects we stored
-      
-      if (referralEntries.length === 0) {
-        setInvitedFriends([]);
-        return;
-      }
-
-      // OPTIMIZATION: Set Immediate State (Prevent "Loading" or Empty State)
-      // This shows the list instantly using the name we stored at referral time.
-      // We map it to the structure UI expects.
-      setInvitedFriends(referralEntries.map(entry => ({
-         id: entry.id,
-         name: entry.name || 'Unknown',
-         points: 0, // Fallback until live fetch
-         status: entry.status || 'active',
-         streak: entry.currentStreak || 0
-      })));
-
-      // Then, fetch LIVE data in background to update scores
-      try {
-        const promises = referralEntries.map(async (entry) => {
-          const friendId = entry.id; // We stored 'id' in the object
-          if (!friendId) return null;
-
-          try {
-            // OPTIMIZATION: Fetch SPECIFIC paths to avoid downloading the friend's entire 'referrals' node.
-            // This massively reduces bandwidth if your friends have friends.
-            const [scoreSnap, streakSnap, usernameSnap, nameSnap] = await Promise.all([
-               get(ref(database, `users/${friendId}/Score`)),
-               get(ref(database, `users/${friendId}/streak`)),
-               get(ref(database, `users/${friendId}/username`)),
-               get(ref(database, `users/${friendId}/name`))
-            ]);
-
-            if (scoreSnap.exists()) {
-               const scores = scoreSnap.val();
-               const streakData = streakSnap.val();
-               const username = usernameSnap.val();
-               const name = nameSnap.val();
-
-               const bestName = username ? `@${username}` : (name || entry.name || 'Unknown');
-               const totalScore = scores?.total_score || 0;
-
-               // Status Logic:
-               // JOINED: Default state (Score 0)
-               // ACTIVE: Has earned points (> 0)
-               let status = 'joined';
-               if (totalScore > 0) status = 'active';
-
-               return {
-                 id: friendId,
-                 name: bestName, 
-                 points: scores?.network_score || 0,
-                 status: status,
-                 streak: streakData?.currentStreakCount || 0
-               };
-            }
-            // If user doesn't exist (deleted?), return the stored entry as fallback
-            return {
-               id: friendId,
-               name: entry.name || 'Unknown',
-               points: 0,
-               status: 'inactive',
-               streak: 0
-            };
-          } catch (e) {
-             console.warn(`Failed to fetch friend ${friendId}`, e);
-             return entry; // Return stored data on error
-          }
-        });
-
-        const results = await Promise.all(promises);
-        setInvitedFriends(results.filter(Boolean));
-      } catch (err) {
-        console.error("Error fetching friends details:", err);
-      }
+      const ids = Object.values(data);
+      const list = await Promise.all(
+        ids.map(async id => {
+          const snap = await get(ref(database, `users/${id}`));
+          const u = snap.val();
+          return { id, name: u.name || 'Unknown', points: u.Score?.network_score || 0, status: u.status || 'active' };
+        })
+      );
+      setInvitedFriends(list);
     });
-
-    return () => unsubscribe();
+    return () => unsub();
   }, [user?.id]);
 
-  // Public Methods
+
+
+  const shareToTelegram = () => window.open(`https://t.me/share/url?url=${encodeURIComponent(inviteLink)}&text=${encodeURIComponent('Join me and earn rewards!')}`, '_blank');
+  const shareToWhatsApp = () => window.open(`https://wa.me/?text=${encodeURIComponent(`Join me and earn rewards! ${inviteLink}`)}`, '_blank');
+  const shareToTwitter = () => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Join me and earn rewards! ${inviteLink}`)}`, '_blank');
   const copyToClipboard = async () => {
     try {
       await navigator.clipboard.writeText(inviteLink);
       return true;
-    } catch {
+    } catch (err) {
+      console.error('Failed to copy: ', err);
       return false;
     }
-  };
-
-  const shareToTelegram = () => {
-    const url = `https://t.me/share/url?url=${encodeURIComponent(inviteLink)}&text=${encodeURIComponent("Join me and earn rewards!")}`;
-    window.open(url, '_blank');
-  };
-
-  const shareToWhatsApp = () => {
-    const url = `https://wa.me/?text=${encodeURIComponent(`Join me and earn rewards! ${inviteLink}`)}`;
-    window.open(url, '_blank');
-  };
-
-  const shareToTwitter = () => {
-    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(`Join me and earn rewards! ${inviteLink}`)}`;
-    window.open(url, '_blank');
   };
 
   return (
     <ReferralContext.Provider value={{
       inviteLink,
-      referralError, // Expose error state
       invitedFriends,
       shareToTelegram,
       shareToWhatsApp,
