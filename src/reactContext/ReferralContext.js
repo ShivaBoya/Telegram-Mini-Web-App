@@ -120,7 +120,7 @@ export const ReferralProvider = ({ children }) => {
       const code = btoa(`${user.id}_${Date.now()}`)
         .replace(/[^a-zA-Z0-9]/g, '')
         .substring(0, 12);
-      setInviteLink(`https://t.me/Web3TodayGameAppTelegram_bot?startapp=ref_${code}_${user.id}`);
+      setInviteLink(`https://t.me/Web3TodayGameAppTelegram_bot?start=ref_${code}_${user.id}`);
     }
   }, [user?.id]);
 
