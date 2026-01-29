@@ -76,7 +76,15 @@ export const ReferralProvider = ({ children }) => {
     tg.ready();
     console.log('[Referral] tg.ready() was called');
 
-    const startParam = tg.initDataUnsafe?.start_param;
+    // Try to get the param from Telegram SDK
+    let startParam = tg.initDataUnsafe?.start_param;
+
+    // FALLBACK: If not found in SDK, check URL parameters (e.g. ?tgWebAppStartParam=...)
+    if (!startParam) {
+      const urlParams = new URL(window.location.href).searchParams;
+      startParam = urlParams.get('tgWebAppStartParam');
+    }
+
     const referredId = tg.initDataUnsafe?.user?.id;
 
     if (!startParam || !referredId) {
@@ -120,11 +128,15 @@ export const ReferralProvider = ({ children }) => {
       const code = btoa(`${user.id}_${Date.now()}`)
         .replace(/[^a-zA-Z0-9]/g, '')
         .substring(0, 12);
-      // MUST use 'startapp' for params to reach the Mini App. 'start' only opens the chat and loses the param.
-      // If you get "Bot Invalid", you MUST configure "Menu Button" in BotFather.
-      setInviteLink(`https://t.me/Web3TodayGameAppTelegram_bot?startapp=ref_${code}_${user.id}`);
+
+      // Use the environment variable for bot username, fallback to a placeholder if missing
+      const botUsername = process.env.REACT_APP_BOT_USERNAME || 'Web3TodayGameAppTelegram_bot';
+
+      // We use 'startapp' because that is the standard for Mini Apps to receive params.
+      setInviteLink(`https://t.me/${botUsername}?startapp=ref_${code}_${user.id}`);
     }
   }, [user?.id]);
+
 
 
 
