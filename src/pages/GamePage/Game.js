@@ -483,7 +483,7 @@ const Game = ({ onGameOver, startGame }) => {
     }
   };
 
-  const fetchHighScoreWrapper = async () => {
+  const fetchHighScoreWrapper = useCallback(async () => {
     const userRef = ref(database, `users/${userId}/Score`);
     try {
       const snapshot = await get(userRef);
@@ -503,7 +503,7 @@ const Game = ({ onGameOver, startGame }) => {
       const hsEl = document.getElementById("high_score");
       if (hsEl) hsEl.textContent = `High: 0`;
     }
-  };
+  }, [userId]);
 
   const spawnFruit = () => {
     if (!gameOverRef.current && canvasRef.current) {
@@ -782,6 +782,7 @@ const Game = ({ onGameOver, startGame }) => {
         backgroundMusicRef.current.currentTime = 0;
       }
       clearInterval(gameLoopRef.current);
+      gameLoopRef.current = null;
       clearInterval(spawnIntervalRef.current);
       clearInterval(timerIntervalRef.current);
       clearInterval(goldenCoinIntervalRef.current);
@@ -846,9 +847,19 @@ const Game = ({ onGameOver, startGame }) => {
   }, [fetchHighScoreWrapper]);
 
   useEffect(() => {
-    if (startGame) {
+    if (startGame && !gameLoopRef.current) {
       initGame();
     }
+    // Cleanup function strictly for unmount or forcing stop
+    return () => {
+      // Since the effect depends on initGame (which is now stable),
+      // this cleanup runs only when component unmounts OR initGame changes (which it shouldn't now).
+      // We do NOT want to clear loop here if we are just re-rendering,
+      // but React runs cleanup before every re-execution of effect.
+      // So valid stability is the only way.
+      // We keep the main large cleanup below (lines 766+).
+      // This specific block was just calling initGame.
+    };
   }, [startGame, initGame]);
 
   // Inject pulse animation CSS.
