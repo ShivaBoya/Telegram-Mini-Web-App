@@ -132,8 +132,8 @@ export const ReferralProvider = ({ children }) => {
       // Use the environment variable for bot username, fallback to a placeholder if missing
       const botUsername = process.env.REACT_APP_BOT_USERNAME || 'Web3TodayGameAppTelegram_bot';
 
-      // We use 'startapp' because that is the standard for Mini Apps to receive params.
-      setInviteLink(`https://t.me/${botUsername}?startapp=ref_${code}_${user.id}`);
+      // We use 'start' because 'startapp' causes "Bot Invalid" if Menu Button is not configured in BotFather.
+      setInviteLink(`https://t.me/${botUsername}?start=ref_${code}_${user.id}`);
     }
   }, [user?.id]);
 
