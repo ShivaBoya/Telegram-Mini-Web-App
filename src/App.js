@@ -1,6 +1,6 @@
 // Main application component with routing, context providers, and daily/weekly task resets
 // import React, {useEffect} from 'react';
-// import { BrowserRouter as Router, Route, Routes, Link, useLocation } from 'react-router-dom';
+// import { Route, Routes, Link, useLocation } from 'react-router-dom';
 // import './App.css';
 // import AdminTask from './pages/AdminTask';
 // import AdminNews from './pages/AdminNews';
@@ -135,7 +135,7 @@
 
 
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Route, Routes, Link, useLocation } from 'react-router-dom';
+import { Route, Routes, useLocation, Link } from 'react-router-dom';
 import './App.css';
 import AdminTask from './pages/AdminTask';
 import AdminNews from './pages/AdminNews';
@@ -208,62 +208,62 @@ function App() {
 
   }, []);
   useEffect(() => {
-    resetTasksIfNeeded(user.id)
-  }, [user.id])
+    const resetTasksIfNeeded = async (userId) => {
+      if (!userId) return;
 
-  const resetTasksIfNeeded = async (userId) => {
-    if (!userId) return;
+      const today = format(new Date(), "yyyy-MM-dd");
 
-    const today = format(new Date(), "yyyy-MM-dd");
+      // Reference to the user's connection data
+      const connectionRef = ref(database, `users/${userId}`);
+      const snapshot = await get(connectionRef);
+      const data = snapshot.val();
 
-    // Reference to the user's connection data
-    const connectionRef = ref(database, `users/${userId}`);
-    const snapshot = await get(connectionRef);
-    const data = snapshot.val();
+      if (!data) return;
 
-    if (!data) return;
+      const updates = {};
 
-    const updates = {};
+      // Daily Reset
+      if (data.lastReset?.daily !== today) {
+        // Remove daily tasks
 
-    // Daily Reset
-    if (data.lastReset?.daily !== today) {
-      // Remove daily tasks
+        await update(ref(database, `connections/${userId}/tasks`), { daily: {} });
 
-      await update(ref(database, `connections/${userId}/tasks`), { daily: {} });
+        // Update lastReset/daily under connections
+        updates[`users/${userId}/lastReset/daily`] = today;
 
-      // Update lastReset/daily under connections
-      updates[`users/${userId}/lastReset/daily`] = today;
+        const userRef = ref(database, `users/${user.id}/Score`);
 
-      const userRef = ref(database, `users/${user.id}/Score`);
+        const snapshot = await get(userRef)
 
-      const snapshot = await get(userRef)
+        console.log(snapshot.val())
 
-      console.log(snapshot.val())
+        // Set no_of_tickets to 3 under users
+        updates[`users/${userId}/Score/no_of_tickets`] = 3;
+        const textData = {
+          action: 'Daily login reward',
+          points: 10,
+          type: 'Home',
+        }
 
-      // Set no_of_tickets to 3 under users
-      updates[`users/${userId}/Score/no_of_tickets`] = 3;
-      const textData = {
-        action: 'Daily login reward',
-        points: 10,
-        type: 'Home',
+        addHistoryLog(userId, textData)
       }
 
-      addHistoryLog(userId, textData)
-    }
+      // Weekly Reset (only on Monday)
+      const weekDay = new Date().getDay(); // 0 = Sunday, 1 = Monday, ...
+      if (data.lastReset?.weekly !== today && weekDay === 1) {
+        await remove(ref(database, `connections/${userId}/tasks/weekly`));
+        await update(ref(database, `history/${userId}`), {});
+        // updates[`connections/${userId}/lastReset/weekly`] = today;
+      }
 
-    // Weekly Reset (only on Monday)
-    const weekDay = new Date().getDay(); // 0 = Sunday, 1 = Monday, ...
-    if (data.lastReset?.weekly !== today && weekDay === 1) {
-      await remove(ref(database, `connections/${userId}/tasks/weekly`));
-      await update(ref(database, `history/${userId}`), {});
-      // updates[`connections/${userId}/lastReset/weekly`] = today;
-    }
+      // Apply updates only if there are changes
+      if (Object.keys(updates).length > 0) {
+        await update(ref(database), updates); // Must update from root
+      }
+    };
 
-    // Apply updates only if there are changes
-    if (Object.keys(updates).length > 0) {
-      await update(ref(database), updates); // Must update from root
-    }
-  };
+    resetTasksIfNeeded(user.id);
+  }, [user.id])
 
   const hideNavbarRoutes = ['/game'];
   const shouldShowNavbar = !hideNavbarRoutes.includes(location.pathname);

@@ -803,12 +803,6 @@ const Game = ({ onGameOver, startGame }) => {
     }
   }, [isMuted]);
 
-  useEffect(() => {
-    if (startGame) {
-      initGame();
-    }
-  }, [startGame, initGame]);
-
   const initGame = useCallback(async () => {
     await fetchHighScoreWrapper();
     fruitsRef.current = [];
@@ -828,7 +822,14 @@ const Game = ({ onGameOver, startGame }) => {
       backgroundMusicRef.current.muted = isMuted;
       backgroundMusicRef.current.currentTime = 0;
       if (!isMuted) {
-        backgroundMusicRef.current.play().catch((err) => console.error(err));
+        // Handle autoplay policy
+        const playPromise = backgroundMusicRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((error) => {
+            console.warn("Autoplay prevented:", error);
+            // Optional: User interaction needed to resume
+          });
+        }
       }
     }
 
@@ -836,7 +837,14 @@ const Game = ({ onGameOver, startGame }) => {
     spawnIntervalRef.current = setInterval(spawnFruit, 1500);
     goldenCoinIntervalRef.current = setInterval(spawnGoldenCoin, 25000);
     startTimer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchHighScoreWrapper]);
+
+  useEffect(() => {
+    if (startGame) {
+      initGame();
+    }
+  }, [startGame, initGame]);
 
   // Inject pulse animation CSS.
   useEffect(() => {
