@@ -34,10 +34,14 @@ export const ReferralProvider = ({ children }) => {
     const referrerUserRef = ref(database, `users/${referrerId}`);
     const userSnap = await get(referrerUserRef);
 
+    let referrerName = "Unknown";
+
     if (!userSnap.exists()) {
       await set(referrerUserRef, {
         referrals: {}
       });
+    } else {
+      referrerName = userSnap.val().name || "Unknown";
     }
     // Add to referrer list and award
     const refRef = ref(database, `users/${referrerId}/referrals`);
@@ -47,6 +51,15 @@ export const ReferralProvider = ({ children }) => {
     if (exists) return;
     const idx = Object.keys(list).length + 1;
     await update(refRef, { [idx]: referredId });
+
+    // Store "Referred By" details in the new user's record
+    const referredUserRef = ref(database, `users/${referredId}`);
+    await update(referredUserRef, {
+      referredBy: {
+        id: referrerId,
+        name: referrerName
+      }
+    });
 
     // Award: referrer 100, referred 50
     await updateScores(referrerId, 100);
