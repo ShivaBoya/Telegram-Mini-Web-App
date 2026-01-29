@@ -391,18 +391,23 @@ const Game = ({ onGameOver, startGame }) => {
   // endGame is defined as an async function.
   async function endGame() {
     gameOverRef.current = true;
+    const finalScore = scoreRef.current;
+    const currentHighScore = highScoreRef.current;
+
     clearInterval(gameLoopRef.current);
     clearInterval(spawnIntervalRef.current);
     clearInterval(timerIntervalRef.current);
     clearInterval(goldenCoinIntervalRef.current);
     clearInterval(bonusIntervalRef.current);
     clearTimeout(bonusTimeoutRef.current);
+
     if (backgroundMusicRef.current) {
       backgroundMusicRef.current.pause();
       backgroundMusicRef.current.currentTime = 0;
     }
-    await updateGameScoresWrapper(scoreRef.current, userId);
-    if (onGameOver) onGameOver(scoreRef.current, highScoreRef.current);
+
+    await updateGameScoresWrapper(finalScore, userId);
+    if (onGameOver) onGameOver(finalScore, currentHighScore);
   }
 
   const startTimer = () => {
