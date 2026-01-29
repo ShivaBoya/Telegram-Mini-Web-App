@@ -53,7 +53,6 @@ const Game = ({ onGameOver, startGame }) => {
   const bombSoundRef = useRef(null);
   const goldenCoinIntervalRef = useRef(null);
   // Initialize mute state from localStorage.
-  //Mute state is initialized to false if not set in localStorage.
   const [isMuted, setIsMuted] = useState(() => localStorage.getItem("gameMuted") === "true");
 
   // Poll localStorage every 500ms.
@@ -73,7 +72,6 @@ const Game = ({ onGameOver, startGame }) => {
   const spawnIntervalRef = useRef(null);
   const timerIntervalRef = useRef(null);
   const highScoreRef = useRef(0);
-  // Game lasts 45 seconds.
   const timeRemainingRef = useRef(45);
   const isDraggingRef = useRef(false);
   const lastPosRef = useRef({ x: 0, y: 0 });
@@ -81,11 +79,10 @@ const Game = ({ onGameOver, startGame }) => {
   const shineParticlesRef = useRef([]);
   const slicedFruitParticlesRef = useRef([]);
   const floatingTextsRef = useRef([]);
-  // New refs for bonus effect timers
   const bonusIntervalRef = useRef(null);
   const bonusTimeoutRef = useRef(null);
 
-  // Helper function to pick a bonus fruit emoji (allowed fruits only).
+  // Helper function to pick a bonus fruit emoji.
   function getBonusEmoji() {
     const bonusFruits = [
       { emoji: "🍎", weight: 30 },
@@ -105,7 +102,6 @@ const Game = ({ onGameOver, startGame }) => {
 
   // ─── CLASS DEFINITIONS ───────────────────────────────────────────
   class Fruit {
-    // The second parameter isBonus defaults to false.
     constructor(isGolden = false, isBonus = false) {
       this.isGolden = isGolden;
       this.isBonus = isBonus;
@@ -116,14 +112,9 @@ const Game = ({ onGameOver, startGame }) => {
         this.emoji = "🪙";
         this.points = 0;
       } else if (isBonus) {
-        // For bonus fruits, override emoji with one from allowed set.
         this.emoji = getBonusEmoji();
         const pointsMap = {
-          "🍎": 1,
-          "🍊": 2,
-          "🍇": 4,
-          "🍓": 5,
-          "🥭": 3,
+          "🍎": 1, "🍊": 2, "🍇": 4, "🍓": 5, "🥭": 3,
         };
         this.points = pointsMap[this.emoji] || 1;
       } else {
@@ -136,13 +127,11 @@ const Game = ({ onGameOver, startGame }) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       if (this.isBonus) {
-        // Bonus fruits appear anywhere on the canvas.
         this.x = Math.random() * (canvas.width - this.size);
         this.y = Math.random() * (canvas.height - this.size);
         this.velocityX = 0;
         this.velocityY = 0;
       } else {
-        // Regular fruit positioning.
         const headerHeight = 120;
         const vh = (window.innerHeight - headerHeight) / 120;
         const allowedTop = headerHeight + 10 * vh;
@@ -180,30 +169,17 @@ const Game = ({ onGameOver, startGame }) => {
     }
     getPoints() {
       const pointsMap = {
-        "🍎": 1,
-        "🍊": 2,
-        "🍇": 4,
-        "🍓": 5,
-        "💣": -5,
-        "❄️": 2,
-        "🥭": 3,
+        "🍎": 1, "🍊": 2, "🍇": 4, "🍓": 5, "💣": -5, "❄️": 2, "🥭": 3,
       };
       return pointsMap[this.emoji] || 1;
     }
     update() {
-      // If not sliced and not in bonus mode, update positions.
       if (!this.isSliced && !this.isBonus) {
         this.velocityY += 0.2;
         this.x += this.velocityX;
         this.y += this.velocityY;
       }
-      // Remove fruit if it goes off-screen.
-      if (
-        !canvasRef.current ||
-        this.x > canvasRef.current.width ||
-        this.x + this.size < 0 ||
-        this.y > canvasRef.current.height
-      ) {
+      if (!canvasRef.current || this.x > canvasRef.current.width || this.x + this.size < 0 || this.y > canvasRef.current.height) {
         return true;
       }
       return false;
@@ -232,16 +208,9 @@ const Game = ({ onGameOver, startGame }) => {
       let param = -1;
       if (len_sq !== 0) param = dot / len_sq;
       let xx, yy;
-      if (param < 0) {
-        xx = x1;
-        yy = y1;
-      } else if (param > 1) {
-        xx = x2;
-        yy = y2;
-      } else {
-        xx = x1 + param * C;
-        yy = y1 + param * D;
-      }
+      if (param < 0) { xx = x1; yy = y1; }
+      else if (param > 1) { xx = x2; yy = y2; }
+      else { xx = x1 + param * C; yy = y1 + param * D; }
       const dx = px - xx;
       const dy = py - yy;
       return Math.sqrt(dx * dx + dy * dy);
@@ -250,18 +219,13 @@ const Game = ({ onGameOver, startGame }) => {
 
   class ShineParticle {
     constructor(x, y) {
-      this.x = x;
-      this.y = y;
+      this.x = x; this.y = y;
       this.size = Math.random() * 10 + 5;
       this.speedX = Math.random() * 3 - 1.5;
       this.speedY = Math.random() * 3 - 1.5;
       this.life = 30;
     }
-    update() {
-      this.x += this.speedX;
-      this.y += this.speedY;
-      this.life--;
-    }
+    update() { this.x += this.speedX; this.y += this.speedY; this.life--; }
     draw(ctx) {
       ctx.fillStyle = `rgba(255, 255, 255, ${this.life / 30})`;
       ctx.beginPath();
@@ -272,8 +236,7 @@ const Game = ({ onGameOver, startGame }) => {
 
   class SlicedFruitParticle {
     constructor(x, y, color) {
-      this.x = x;
-      this.y = y;
+      this.x = x; this.y = y;
       this.size = Math.random() * 5 + 2;
       this.speedX = Math.random() * 6 - 3;
       this.speedY = -Math.random() * 15;
@@ -281,9 +244,7 @@ const Game = ({ onGameOver, startGame }) => {
       this.color = color;
     }
     update() {
-      this.x += this.speedX;
-      this.y += this.speedY;
-      this.speedY += this.gravity;
+      this.x += this.speedX; this.y += this.speedY; this.speedY += this.gravity;
     }
     draw(ctx) {
       ctx.fillStyle = this.color;
@@ -295,18 +256,10 @@ const Game = ({ onGameOver, startGame }) => {
 
   class FloatingText {
     constructor(x, y, text, color) {
-      this.x = x;
-      this.y = y;
-      this.text = text;
-      this.color = color;
-      this.life = 60;
-      this.opacity = 1;
+      this.x = x; this.y = y; this.text = text; this.color = color;
+      this.life = 60; this.opacity = 1;
     }
-    update() {
-      this.y -= 0.5;
-      this.life--;
-      this.opacity = this.life / 60;
-    }
+    update() { this.y -= 0.5; this.life--; this.opacity = this.life / 60; }
     draw(ctx) {
       ctx.save();
       ctx.globalAlpha = this.opacity;
@@ -327,102 +280,25 @@ const Game = ({ onGameOver, startGame }) => {
     }
   };
 
-  // When a golden coin is sliced, trigger bonus mode:
-  // Spawn bonus fruits (only allowed fruits) across the screen,
-  // and display a countdown timer that decrements every second.
-  const bonusEffect = () => {
-    // Pause normal fruit spawning.
-    clearInterval(spawnIntervalRef.current);
-    const count = Math.floor(Math.random() * 11) + 40; // 20 to 30 bonus fruits.
-    for (let i = 0; i < count; i++) {
-      let bonusFruit = new Fruit(false, true);
-      // Override emoji with bonus fruit emoji.
-      bonusFruit.emoji = getBonusEmoji();
-      const pointsMap = {
-        "🍎": 1,
-        "🍊": 2,
-        "🍇": 4,
-        "🍓": 5,
-        "🥭": 3,
-      };
-      bonusFruit.points = pointsMap[bonusFruit.emoji] || 1;
-      fruitsRef.current.push(bonusFruit);
-    }
-
-    // Create and display the countdown timer
-    let timeLeft = 5;
-    const timerElement = document.createElement("div");
-    timerElement.textContent = `${timeLeft}`;
-    timerElement.style.position = "fixed";
-    timerElement.style.top = "50%";
-    timerElement.opacity = 0.1;
-    timerElement.style.left = "50%";
-    timerElement.style.transform = "translate(-50%, -50%)";
-    timerElement.style.fontSize = "80px";
-    timerElement.style.fontWeight = "bold";
-    timerElement.style.color = "red";
-    timerElement.style.textShadow = "0 0 10px rgba(237, 140, 98, 0.8)";
-    timerElement.style.zIndex = "1000";
-    timerElement.style.pointerEvents = "none";
-    document.body.appendChild(timerElement);
-
-    // Update the timer every second
-    bonusIntervalRef.current = setInterval(() => {
-      timeLeft--;
-      if (timerElement) timerElement.textContent = `${timeLeft}`;
-
-      // Add a pulse animation effect
-      timerElement.style.animation = "none";
-      void timerElement.offsetWidth; // Trigger reflow
-      timerElement.style.animation = "pulse 1s";
-    }, 1000);
-
-    // After 5 seconds, remove bonus fruits, timer element, and resume normal spawn.
-    bonusTimeoutRef.current = setTimeout(() => {
-      clearInterval(bonusIntervalRef.current);
-      if (document.body.contains(timerElement)) {
-        document.body.removeChild(timerElement);
+  const spawnFruit = () => {
+    if (!gameOverRef.current && canvasRef.current) {
+      const fruitCounts = [4, 4, 4, 3];
+      const count = fruitCounts[Math.floor(Math.random() * fruitCounts.length)];
+      for (let i = 0; i < count; i++) {
+        fruitsRef.current.push(new Fruit());
       }
-      fruitsRef.current = fruitsRef.current.filter((fruit) => !fruit.isBonus);
-      spawnIntervalRef.current = setInterval(spawnFruit, 1500);
-    }, 5000);
+    }
   };
 
-  // endGame is defined as an async function.
-  async function endGame() {
-    gameOverRef.current = true;
-    const finalScore = scoreRef.current;
-    const currentHighScore = highScoreRef.current;
-
-    clearInterval(gameLoopRef.current);
-    clearInterval(spawnIntervalRef.current);
-    clearInterval(timerIntervalRef.current);
-    clearInterval(goldenCoinIntervalRef.current);
-    clearInterval(bonusIntervalRef.current);
-    clearTimeout(bonusTimeoutRef.current);
-
-    if (backgroundMusicRef.current) {
-      backgroundMusicRef.current.pause();
-      backgroundMusicRef.current.currentTime = 0;
-    }
-
-    await updateGameScoresWrapper(finalScore, userId);
-    if (onGameOver) onGameOver(finalScore, currentHighScore);
-  }
-
-  const startTimer = () => {
-    clearInterval(timerIntervalRef.current);
-    timerIntervalRef.current = setInterval(() => {
-      if (!gameOverRef.current) {
-        timeRemainingRef.current--;
-        const timerEl = document.getElementById("timer");
-        if (timerEl) timerEl.textContent = `Time: ${timeRemainingRef.current}`;
-        if (timeRemainingRef.current <= 0) {
-          clearInterval(timerIntervalRef.current);
-          endGame();
-        }
+  const spawnGoldenCoin = () => {
+    if (!gameOverRef.current) {
+      const coinExists = fruitsRef.current.some(
+        (fruit) => fruit.emoji === "🪙" && !fruit.isSliced
+      );
+      if (!coinExists) {
+        fruitsRef.current.push(new Fruit(true));
       }
-    }, 1000);
+    }
   };
 
   const updateGame = () => {
@@ -432,34 +308,23 @@ const Game = ({ onGameOver, startGame }) => {
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Update shine particles.
     for (let i = shineParticlesRef.current.length - 1; i >= 0; i--) {
       shineParticlesRef.current[i].update();
       shineParticlesRef.current[i].draw(ctx);
-      if (shineParticlesRef.current[i].life <= 0) {
-        shineParticlesRef.current.splice(i, 1);
-      }
+      if (shineParticlesRef.current[i].life <= 0) shineParticlesRef.current.splice(i, 1);
     }
-    // Update sliced fruit particles.
     for (let i = slicedFruitParticlesRef.current.length - 1; i >= 0; i--) {
       slicedFruitParticlesRef.current[i].update();
       slicedFruitParticlesRef.current[i].draw(ctx);
-      if (slicedFruitParticlesRef.current[i].y > canvas.height) {
-        slicedFruitParticlesRef.current.splice(i, 1);
-      }
+      if (slicedFruitParticlesRef.current[i].y > canvas.height) slicedFruitParticlesRef.current.splice(i, 1);
     }
-    // Update floating texts.
     for (let i = floatingTextsRef.current.length - 1; i >= 0; i--) {
       floatingTextsRef.current[i].update();
       floatingTextsRef.current[i].draw(ctx);
-      if (floatingTextsRef.current[i].life <= 0) {
-        floatingTextsRef.current.splice(i, 1);
-      }
+      if (floatingTextsRef.current[i].life <= 0) floatingTextsRef.current.splice(i, 1);
     }
-    // Update fruits.
     for (let i = fruitsRef.current.length - 1; i >= 0; i--) {
       const fruit = fruitsRef.current[i];
-      // During bonus mode (when bonus fruits are on screen), bonus fruits are static.
       if (fruit.isBonus) {
         fruit.draw(ctx);
       } else {
@@ -470,7 +335,6 @@ const Game = ({ onGameOver, startGame }) => {
         }
       }
     }
-    // Draw slash line.
     if (slashPointsRef.current.length > 1) {
       ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
       ctx.lineWidth = 3;
@@ -505,96 +369,80 @@ const Game = ({ onGameOver, startGame }) => {
     }
   }, [userId]);
 
-  const spawnFruit = () => {
-    if (!gameOverRef.current && canvasRef.current) {
-      const fruitCounts = [4, 4, 4, 3];
-      const count = fruitCounts[Math.floor(Math.random() * fruitCounts.length)];
-      for (let i = 0; i < count; i++) {
-        fruitsRef.current.push(new Fruit());
-      }
+  const bonusEffect = () => {
+    clearInterval(spawnIntervalRef.current);
+    const count = Math.floor(Math.random() * 11) + 40;
+    for (let i = 0; i < count; i++) {
+      let bonusFruit = new Fruit(false, true);
+      bonusFruit.emoji = getBonusEmoji();
+      const pointsMap = { "🍎": 1, "🍊": 2, "🍇": 4, "🍓": 5, "🥭": 3 };
+      bonusFruit.points = pointsMap[bonusFruit.emoji] || 1;
+      fruitsRef.current.push(bonusFruit);
     }
+
+    let timeLeft = 5;
+    const timerElement = document.createElement("div");
+    timerElement.textContent = `${timeLeft}`;
+    timerElement.style.position = "fixed";
+    timerElement.style.top = "50%";
+    timerElement.style.left = "50%";
+    timerElement.style.transform = "translate(-50%, -50%)";
+    timerElement.style.fontSize = "80px";
+    timerElement.style.fontWeight = "bold";
+    timerElement.style.color = "red";
+    timerElement.style.textShadow = "0 0 10px rgba(237, 140, 98, 0.8)";
+    timerElement.style.zIndex = "1000";
+    timerElement.style.pointerEvents = "none";
+    document.body.appendChild(timerElement);
+
+    bonusIntervalRef.current = setInterval(() => {
+      timeLeft--;
+      if (timerElement) timerElement.textContent = `${timeLeft}`;
+      timerElement.style.animation = "none";
+      void timerElement.offsetWidth;
+      timerElement.style.animation = "pulse 1s";
+    }, 1000);
+
+    bonusTimeoutRef.current = setTimeout(() => {
+      clearInterval(bonusIntervalRef.current);
+      if (document.body.contains(timerElement)) {
+        document.body.removeChild(timerElement);
+      }
+      fruitsRef.current = fruitsRef.current.filter((fruit) => !fruit.isBonus);
+      spawnIntervalRef.current = setInterval(spawnFruit, 1500);
+    }, 5000);
   };
 
-  const spawnGoldenCoin = () => {
-    if (!gameOverRef.current) {
-      // Only add a golden coin if one isn't already onscreen.
-      const coinExists = fruitsRef.current.some(
-        (fruit) => fruit.emoji === "🪙" && !fruit.isSliced
-      );
-      if (!coinExists) {
-        fruitsRef.current.push(new Fruit(true));
-      }
+  function bombEffect() {
+    document.documentElement.style.setProperty("--background-color", "rgba(255, 0, 0, 0.3)");
+    if (bombSoundRef.current) {
+      bombSoundRef.current.currentTime = 0;
+      bombSoundRef.current.play().catch((err) => console.error(err));
     }
-  };
+    let bombText = document.createElement("div");
+    bombText.textContent = "💣 Ohh, you lost 5 points! 😢";
+    bombText.style.position = "fixed";
+    bombText.style.top = "30%";
+    bombText.style.left = "50%";
+    bombText.style.transform = "translate(-50%, -50%)";
+    bombText.style.fontSize = "17px";
+    bombText.style.color = "#fff";
+    bombText.style.padding = "10px 20px";
+    bombText.style.backgroundColor = "rgba(255, 0, 0, 0.8)";
+    bombText.style.borderRadius = "8px";
+    bombText.style.zIndex = "1000";
+    bombText.style.pointerEvents = "none";
+    bombText.style.animation = "floatUp 2s ease-out forwards";
+    document.body.appendChild(bombText);
 
-  // When slicing occurs, check each fruit.
-  function handleSlice(points) {
-    if (gameOverRef.current || points.length < 2) return;
-    const x1 = points[points.length - 2].x;
-    const y1 = points[points.length - 2].y;
-    const x2 = points[points.length - 1].x;
-    const y2 = points[points.length - 1].y;
-    let sliceHappened = false;
-    fruitsRef.current.forEach((fruit) => {
-      if (!fruit.isSliced && fruit.checkSlice(x1, y1, x2, y2)) {
-        fruit.isSliced = true;
-        // If it's a golden coin, trigger bonus mode.
-        if (fruit.emoji === "🪙") {
-          bonusEffect();
-        } else {
-          // For regular (non-golden) fruits, update score and show effects.
-          scoreRef.current += fruit.points;
-          const scoreEl = document.getElementById("score");
-          if (scoreEl) scoreEl.textContent = `Score: ${scoreRef.current}`;
-          for (let i = 0; i < 5; i++) {
-            shineParticlesRef.current.push(
-              new ShineParticle(fruit.x + fruit.size / 2, fruit.y + fruit.size / 2)
-            );
-          }
-          const fruitColors = {
-            "🍎": "#ff0000",
-            "🍊": "#ffa500",
-            "🍇": "#800080",
-            "🍓": "#ff0000",
-            "💣": "#000000",
-            "❄️": "#ffffff",
-            "🥭": "#ffa500",
-          };
-          const color = fruitColors[fruit.emoji] || "#ffffff";
-          for (let i = 0; i < 10; i++) {
-            slicedFruitParticlesRef.current.push(
-              new SlicedFruitParticle(
-                fruit.x + fruit.size / 2,
-                fruit.y + fruit.size / 2,
-                color
-              )
-            );
-          }
-          floatingTextsRef.current.push(
-            new FloatingText(
-              fruit.x + fruit.size / 2,
-              fruit.y + fruit.size / 2,
-              (fruit.points > 0 ? "+" : "") + fruit.points,
-              color
-            )
-          );
-          if (fruit.emoji === "💣") {
-            bombEffect();
-          } else if (fruit.emoji === "❄️") {
-            iceEffect();
-          }
-        }
-        sliceHappened = true;
-      }
-    });
-    if (sliceHappened) {
-      if (sliceSoundRef.current) {
-        sliceSoundRef.current.currentTime = 0;
-        sliceSoundRef.current.play().catch((err) => console.error(err));
-      }
-    } else {
-      slashPointsRef.current = [points[points.length - 1]];
+    if (!canvasRef.current.classList.contains("bomb-shake")) {
+      canvasRef.current.classList.add("bomb-shake");
+      setTimeout(() => { canvasRef.current.classList.remove("bomb-shake"); }, 2000);
     }
+    setTimeout(() => {
+      document.documentElement.style.setProperty("--background-color", "#ecf0f1");
+      if (document.body.contains(bombText)) document.body.removeChild(bombText);
+    }, 1000);
   }
 
   function iceEffect() {
@@ -623,12 +471,7 @@ const Game = ({ onGameOver, startGame }) => {
     iceText.style.animation = "floatUp 2s ease-out forwards";
     document.body.appendChild(iceText);
 
-    setTimeout(() => {
-      if (document.body.contains(iceText)) {
-        document.body.removeChild(iceText);
-      }
-    }, 2000);
-
+    setTimeout(() => { if (document.body.contains(iceText)) document.body.removeChild(iceText); }, 2000);
     setTimeout(() => {
       document.documentElement.style.setProperty("--background-color", "#ecf0f1");
       scoreEl.style.boxShadow = "none";
@@ -637,45 +480,137 @@ const Game = ({ onGameOver, startGame }) => {
     }, 5000);
   }
 
-  function bombEffect() {
-    document.documentElement.style.setProperty("--background-color", "rgba(255, 0, 0, 0.3)");
-    if (bombSoundRef.current) {
-      bombSoundRef.current.currentTime = 0;
-      bombSoundRef.current.play().catch((err) => console.error(err));
-    }
-
-    let bombText = document.createElement("div");
-    bombText.textContent = "💣 Ohh, you lost 5 points! 😢";
-    bombText.style.position = "fixed";
-    bombText.style.top = "30%";
-    bombText.style.left = "50%";
-    bombText.style.transform = "translate(-50%, -50%)";
-    bombText.style.fontSize = "17px";
-    bombText.style.color = "#fff";
-    bombText.style.padding = "10px 20px";
-    bombText.style.backgroundColor = "rgba(255, 0, 0, 0.8)";
-    bombText.style.borderRadius = "8px";
-    bombText.style.zIndex = "1000";
-    bombText.style.pointerEvents = "none";
-    bombText.style.animation = "floatUp 2s ease-out forwards";
-    document.body.appendChild(bombText);
-
-    if (!canvasRef.current.classList.contains("bomb-shake")) {
-      canvasRef.current.classList.add("bomb-shake");
-      setTimeout(() => {
-        canvasRef.current.classList.remove("bomb-shake");
-      }, 2000);
-    }
-
-    setTimeout(() => {
-      document.documentElement.style.setProperty("--background-color", "#ecf0f1");
-      if (document.body.contains(bombText)) {
-        document.body.removeChild(bombText);
+  function handleSlice(points) {
+    if (gameOverRef.current || points.length < 2) return;
+    const x1 = points[points.length - 2].x;
+    const y1 = points[points.length - 2].y;
+    const x2 = points[points.length - 1].x;
+    const y2 = points[points.length - 1].y;
+    let sliceHappened = false;
+    fruitsRef.current.forEach((fruit) => {
+      if (!fruit.isSliced && fruit.checkSlice(x1, y1, x2, y2)) {
+        fruit.isSliced = true;
+        if (fruit.emoji === "🪙") {
+          bonusEffect();
+        } else {
+          scoreRef.current += fruit.points;
+          const scoreEl = document.getElementById("score");
+          if (scoreEl) scoreEl.textContent = `Score: ${scoreRef.current}`;
+          for (let i = 0; i < 5; i++) {
+            shineParticlesRef.current.push(new ShineParticle(fruit.x + fruit.size / 2, fruit.y + fruit.size / 2));
+          }
+          const fruitColors = { "🍎": "#ff0000", "🍊": "#ffa500", "🍇": "#800080", "🍓": "#ff0000", "💣": "#000000", "❄️": "#ffffff", "🥭": "#ffa500" };
+          const color = fruitColors[fruit.emoji] || "#ffffff";
+          for (let i = 0; i < 10; i++) {
+            slicedFruitParticlesRef.current.push(new SlicedFruitParticle(fruit.x + fruit.size / 2, fruit.y + fruit.size / 2, color));
+          }
+          floatingTextsRef.current.push(new FloatingText(fruit.x + fruit.size / 2, fruit.y + fruit.size / 2, (fruit.points > 0 ? "+" : "") + fruit.points, color));
+          if (fruit.emoji === "💣") bombEffect();
+          else if (fruit.emoji === "❄️") iceEffect();
+        }
+        sliceHappened = true;
       }
-    }, 1000);
+    });
+    if (sliceHappened) {
+      if (sliceSoundRef.current) {
+        sliceSoundRef.current.currentTime = 0;
+        sliceSoundRef.current.play().catch((err) => console.error(err));
+      }
+    } else {
+      slashPointsRef.current = [points[points.length - 1]];
+    }
   }
 
-  // ─── EVENT LISTENERS & SOUND PRELOADING ─────────────────────────
+  async function endGame() {
+    gameOverRef.current = true;
+    const finalScore = scoreRef.current;
+    const currentHighScore = highScoreRef.current;
+
+    console.log("[Game.js] endGame called. Captured Score:", finalScore, "HighScore:", currentHighScore);
+
+    clearInterval(gameLoopRef.current);
+    clearInterval(spawnIntervalRef.current);
+    clearInterval(timerIntervalRef.current);
+    clearInterval(goldenCoinIntervalRef.current);
+    clearInterval(bonusIntervalRef.current);
+    clearTimeout(bonusTimeoutRef.current);
+
+    if (backgroundMusicRef.current) {
+      backgroundMusicRef.current.pause();
+      backgroundMusicRef.current.currentTime = 0;
+    }
+
+    await updateGameScoresWrapper(finalScore, userId);
+    if (onGameOver) onGameOver(finalScore, currentHighScore);
+  }
+
+  const startTimer = () => {
+    clearInterval(timerIntervalRef.current);
+    timerIntervalRef.current = setInterval(() => {
+      if (!gameOverRef.current) {
+        timeRemainingRef.current--;
+        const timerEl = document.getElementById("timer");
+        if (timerEl) timerEl.textContent = `Time: ${timeRemainingRef.current}`;
+        if (timeRemainingRef.current <= 0) {
+          clearInterval(timerIntervalRef.current);
+          endGame();
+        }
+      }
+    }, 1000);
+  };
+
+  const initGame = useCallback(async () => {
+    console.log("[Game.js] initGame running...");
+    await fetchHighScoreWrapper();
+    fruitsRef.current = [];
+    scoreRef.current = 0;
+    timeRemainingRef.current = 45;
+    gameOverRef.current = false;
+    const scoreEl = document.getElementById("score");
+    if (scoreEl) scoreEl.textContent = `Score: ${scoreRef.current}`;
+    const timerEl = document.getElementById("timer");
+    if (timerEl) timerEl.textContent = `Time: ${timeRemainingRef.current}`;
+    clearInterval(gameLoopRef.current);
+    clearInterval(spawnIntervalRef.current);
+    clearInterval(timerIntervalRef.current);
+    clearInterval(goldenCoinIntervalRef.current);
+
+    if (backgroundMusicRef.current) {
+      backgroundMusicRef.current.muted = isMuted;
+      backgroundMusicRef.current.currentTime = 0;
+      if (!isMuted) {
+        const playPromise = backgroundMusicRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((error) => console.warn("Autoplay prevented:", error));
+        }
+      }
+    }
+
+    gameLoopRef.current = setInterval(updateGame, 1000 / 60);
+    spawnIntervalRef.current = setInterval(spawnFruit, 1500);
+    goldenCoinIntervalRef.current = setInterval(spawnGoldenCoin, 25000);
+    startTimer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchHighScoreWrapper]);
+
+  // UseEffect for Game Start
+  useEffect(() => {
+    // Only start game if startGame is true AND gameLoop is not already running
+    if (startGame && !gameLoopRef.current) {
+      initGame();
+    }
+    return () => {
+      // Main Cleanup
+      window.removeEventListener("resize", resizeCanvas);
+      // We don't remove canvas listeners here because they are added in the other useEffect 
+      // ACTUALLY, we should manage them.
+      // But let's keep the structure given: listeners in one effect, game logic in this one?
+      // No, listeners were in a separate effect in original code.
+      // I will add the listeners effect below.
+    };
+  }, [startGame, initGame]);
+
+  // Event Listeners Effect (re-added)
   useEffect(() => {
     backgroundMusicRef.current = new Audio("/backgroundmusic.mp3");
     backgroundMusicRef.current.loop = true;
@@ -696,7 +631,6 @@ const Game = ({ onGameOver, startGame }) => {
       lastPosRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
       slashPointsRef.current = [lastPosRef.current];
     };
-
     const handleMouseMove = (e) => {
       if (!isDraggingRef.current) return;
       const rect = canvas.getBoundingClientRect();
@@ -705,7 +639,6 @@ const Game = ({ onGameOver, startGame }) => {
       handleSlice(slashPointsRef.current);
       lastPosRef.current = currentPos;
     };
-
     const handleMouseUp = () => {
       isDraggingRef.current = false;
       slashPointsRef.current = [];
@@ -724,7 +657,6 @@ const Game = ({ onGameOver, startGame }) => {
       lastPosRef.current = { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
       slashPointsRef.current = [lastPosRef.current];
     };
-
     const handleTouchMove = (e) => {
       e.preventDefault();
       if (!isDraggingRef.current) return;
@@ -735,7 +667,6 @@ const Game = ({ onGameOver, startGame }) => {
       handleSlice(slashPointsRef.current);
       lastPosRef.current = currentPos;
     };
-
     const handleTouchEnd = (e) => {
       e.preventDefault();
       isDraggingRef.current = false;
@@ -746,27 +677,11 @@ const Game = ({ onGameOver, startGame }) => {
     canvas.addEventListener("touchmove", handleTouchMove, { passive: false });
     canvas.addEventListener("touchend", handleTouchEnd, { passive: false });
 
-    document.body.addEventListener(
-      "touchstart",
-      (e) => {
-        if (e.target === canvas) e.preventDefault();
-      },
-      { passive: false }
-    );
-    document.body.addEventListener(
-      "touchmove",
-      (e) => {
-        if (e.target === canvas) e.preventDefault();
-      },
-      { passive: false }
-    );
-    document.body.addEventListener(
-      "touchend",
-      (e) => {
-        if (e.target === canvas) e.preventDefault();
-      },
-      { passive: false }
-    );
+    // Document body listeners
+    const preventScroll = (e) => { if (e.target === canvas) e.preventDefault(); };
+    document.body.addEventListener("touchstart", preventScroll, { passive: false });
+    document.body.addEventListener("touchmove", preventScroll, { passive: false });
+    document.body.addEventListener("touchend", preventScroll, { passive: false });
 
     return () => {
       window.removeEventListener("resize", resizeCanvas);
@@ -777,6 +692,10 @@ const Game = ({ onGameOver, startGame }) => {
       canvas.removeEventListener("touchstart", handleTouchStart);
       canvas.removeEventListener("touchmove", handleTouchMove);
       canvas.removeEventListener("touchend", handleTouchEnd);
+      document.body.removeEventListener("touchstart", preventScroll);
+      document.body.removeEventListener("touchmove", preventScroll);
+      document.body.removeEventListener("touchend", preventScroll);
+
       if (backgroundMusicRef.current) {
         backgroundMusicRef.current.pause();
         backgroundMusicRef.current.currentTime = 0;
@@ -790,79 +709,8 @@ const Game = ({ onGameOver, startGame }) => {
       clearTimeout(bonusTimeoutRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // Run once on mount
 
-  useEffect(() => {
-    if (backgroundMusicRef.current) {
-      backgroundMusicRef.current.muted = isMuted;
-      if (isMuted) {
-        backgroundMusicRef.current.pause();
-      } else {
-        backgroundMusicRef.current.play().catch((err) => console.error(err));
-      }
-    }
-    if (sliceSoundRef.current) {
-      sliceSoundRef.current.muted = isMuted;
-    }
-    if (bombSoundRef.current) {
-      bombSoundRef.current.muted = isMuted;
-    }
-  }, [isMuted]);
-
-  const initGame = useCallback(async () => {
-    await fetchHighScoreWrapper();
-    fruitsRef.current = [];
-    scoreRef.current = 0;
-    timeRemainingRef.current = 45;
-    gameOverRef.current = false;
-    const scoreEl = document.getElementById("score");
-    if (scoreEl) scoreEl.textContent = `Score: ${scoreRef.current}`;
-    const timerEl = document.getElementById("timer");
-    if (timerEl) timerEl.textContent = `Time: ${timeRemainingRef.current}`;
-    clearInterval(gameLoopRef.current);
-    clearInterval(spawnIntervalRef.current);
-    clearInterval(timerIntervalRef.current);
-    clearInterval(goldenCoinIntervalRef.current);
-
-    if (backgroundMusicRef.current) {
-      backgroundMusicRef.current.muted = isMuted;
-      backgroundMusicRef.current.currentTime = 0;
-      if (!isMuted) {
-        // Handle autoplay policy
-        const playPromise = backgroundMusicRef.current.play();
-        if (playPromise !== undefined) {
-          playPromise.catch((error) => {
-            console.warn("Autoplay prevented:", error);
-            // Optional: User interaction needed to resume
-          });
-        }
-      }
-    }
-
-    gameLoopRef.current = setInterval(updateGame, 1000 / 60);
-    spawnIntervalRef.current = setInterval(spawnFruit, 1500);
-    goldenCoinIntervalRef.current = setInterval(spawnGoldenCoin, 25000);
-    startTimer();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchHighScoreWrapper]);
-
-  useEffect(() => {
-    if (startGame && !gameLoopRef.current) {
-      initGame();
-    }
-    // Cleanup function strictly for unmount or forcing stop
-    return () => {
-      // Since the effect depends on initGame (which is now stable),
-      // this cleanup runs only when component unmounts OR initGame changes (which it shouldn't now).
-      // We do NOT want to clear loop here if we are just re-rendering,
-      // but React runs cleanup before every re-execution of effect.
-      // So valid stability is the only way.
-      // We keep the main large cleanup below (lines 766+).
-      // This specific block was just calling initGame.
-    };
-  }, [startGame, initGame]);
-
-  // Inject pulse animation CSS.
   useEffect(() => {
     const style = document.createElement("style");
     style.textContent = `
@@ -873,9 +721,7 @@ const Game = ({ onGameOver, startGame }) => {
       }
     `;
     document.head.appendChild(style);
-    return () => {
-      document.head.removeChild(style);
-    };
+    return () => { document.head.removeChild(style); };
   }, []);
 
   return <canvas id="gameCanvas" ref={canvasRef} />;
