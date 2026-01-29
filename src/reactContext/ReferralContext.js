@@ -120,7 +120,9 @@ export const ReferralProvider = ({ children }) => {
       const code = btoa(`${user.id}_${Date.now()}`)
         .replace(/[^a-zA-Z0-9]/g, '')
         .substring(0, 12);
-      setInviteLink(`https://t.me/Web3TodayGameAppTelegram_bot?start=ref_${code}_${user.id}`);
+      // MUST use 'startapp' for params to reach the Mini App. 'start' only opens the chat and loses the param.
+      // If you get "Bot Invalid", you MUST configure "Menu Button" in BotFather.
+      setInviteLink(`https://t.me/Web3TodayGameAppTelegram_bot?startapp=ref_${code}_${user.id}`);
     }
   }, [user?.id]);
 
