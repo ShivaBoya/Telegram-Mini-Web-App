@@ -55,6 +55,7 @@ export const ReferralProvider = ({ children }) => {
     // Store "Referred By" details in the new user's record
     const referredUserRef = ref(database, `users/${referredId}`);
     await update(referredUserRef, {
+      referralSource: "Invite",
       referredBy: {
         id: referrerId,
         name: referrerName

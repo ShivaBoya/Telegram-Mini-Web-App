@@ -9,7 +9,7 @@
 //   }
 
 //   const userId = user?.id.toString();
- 
+
 
 //   const userRef = ref(database, `users/${userId}`);
 
@@ -79,6 +79,7 @@ export const initializeUser = async (user) => {
           lastStreakCheckDateUTC: new Date().toISOString().split('T')[0],
           longestStreakCount: 1
         },
+        referralSource: "Direct", // Default to Direct, overwritten by ReferralContext if applicable
       });
       console.log("New user created:", userId);
     } else {
