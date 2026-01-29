@@ -511,34 +511,40 @@ export default function TasksPage() {
         break;
 
       case "news":
-        if (!isTaskDone(task) || currentText === "Claim") {
-          if (newsCount < 5) {
-            // OPTIMIZATION: Immediate navigation
-            setTimeout(() => navigate("/news"), 0);
-            return;
-          }
-          executeClaim(task);
-        } else {
-          // OPTIMIZATION: Immediate navigation
-          setTimeout(() => navigate("/news"), 0);
+        // If task is not done, check if we can claim or need to navigate
+        if (!isTaskDone(task)) {
+          // Check if ready to claim (e.g. read 5 news)
+          // Hardcoded 5 matching the logic user requested/implied
           if (newsCount >= 5) {
-            // Local UI update to enable claim if we just returned
-            update(userTasksRef, { [taskId]: false });
-            setButtonText(prev => ({ ...prev, [taskId]: "Claim" }));
+            executeClaim(task);
+          } else {
+            // Not enough news read -> Navigate
+            setTimeout(() => navigate("/news"), 0);
+          }
+        } else {
+          // Already done, just navigate for review
+          setTimeout(() => navigate("/news"), 0);
+        }
+        break;
+
+      case "referral":
+        // Logic for Referral Claim
+        if (!isTaskDone(task)) {
+          if (task.completed >= task.total) {
+            executeClaim(task);
+          } else {
+            // Navigate to invite page if not enough referrals
+            setTimeout(() => navigate("/network"), 0);
           }
         }
         break;
 
       case "weekly":
-      case "referral":
-        // Logic for Weekly or Referral Claim
         if (!isTaskDone(task)) {
-          // Verify completion requirement using the mapped 'completed' value
-          // task.completed is set in mapTask
           if (task.completed >= task.total) {
             executeClaim(task);
           } else {
-            // Optional: Visual feedback that it's not ready
+            // Visual feedback that it's not ready
             const updatedButtonTexts = { ...buttonText };
             updatedButtonTexts[taskId] = "In Progress";
             setButtonText(updatedButtonTexts);
@@ -783,7 +789,9 @@ export default function TasksPage() {
                                   : (
                                     (userTasks[taskId] === false) ||
                                       (task.type === 'weekly' && task.completed >= task.total) ||
-                                      (task.type === 'game' && gameCompleted)
+                                      (task.type === 'game' && gameCompleted) ||
+                                      (task.type === 'referral' && task.completed >= task.total) ||
+                                      (task.type === 'news' && newsCount >= 5)
                                       ? "Claim"
                                       : buttonText[taskId] || "Start Task"
                                   )
