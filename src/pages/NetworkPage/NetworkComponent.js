@@ -214,8 +214,8 @@ export default function NetworkComponent() {
                   onClick={inviteLink ? handleShareToggle : undefined}
                   disabled={!inviteLink}
                   className={`w-full text-white py-2 h-12 font-bold ${inviteLink
-                      ? "bg-gradient-to-r from-indigo-500 to-purple-600"
-                      : "bg-gray-600 opacity-50 cursor-not-allowed"
+                    ? "bg-gradient-to-r from-indigo-500 to-purple-600"
+                    : "bg-gray-600 opacity-50 cursor-not-allowed"
                     }`}
                 >
                   <Share2 className="h-5 w-5 mr-2" />
@@ -288,8 +288,8 @@ export default function NetworkComponent() {
 
                 {/* Minimal Stats Bar */}
                 <div className="bg-white/5 rounded-lg p-3 flex justify-between text-xs text-white/70 mb-2">
-                  <span>Total Invites Sent <b className="text-white ml-1">0</b></span>
-                  <span>Active Friends <b className="text-white ml-1">{invitedFriends?.length || 0}</b></span>
+                  <span>Total Invites Sent <b className="text-white ml-1">{invitedFriends?.length || 0}</b></span>
+                  <span>Active Friends <b className="text-white ml-1">{invitedFriends?.filter(f => f.status === 'active').length || 0}</b></span>
                   <span className="text-amber-300 flex items-center gap-1"> <Zap className="h-3 w-3" /> 0</span>
                 </div>
 
