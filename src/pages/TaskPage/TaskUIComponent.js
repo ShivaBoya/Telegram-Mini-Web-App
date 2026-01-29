@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { ChevronLeft, Award, Zap, Users, Wallet, CheckSquare, BookOpen, PlayCircle, Send, Twitter, X } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
@@ -25,7 +25,7 @@ export default function TasksPage() {
   const [videoTimer, setVideoTimer] = useState(0);
 
   const [activeTaskId, setActiveTaskId] = useState(null);
-  const [click, setClick] = useState({});
+  // const [click, setClick] = useState({}); // Removed unused state
 
   useEffect(() => {
     let interval;
@@ -307,6 +307,10 @@ export default function TasksPage() {
    * Manages Video URL Versioning
    */
   const handleTitle = async (task, taskId) => {
+    // DEBUG: Alert to confirm click and task data
+    const tg = window.Telegram?.WebApp;
+    if (tg) tg.showAlert(`Debug: Clicked Task: ${task.title} (Type: ${task.type})`);
+
     const clickBtn = document.getElementById(`clickBtn${taskId}`);
     const currentText = buttonText[taskId] || "Start Task";
 
@@ -472,7 +476,7 @@ export default function TasksPage() {
         break;
 
       case "social":
-        setClick(prev => ({ ...prev, [task.title]: true }));
+        // setClick(prev => ({ ...prev, [task.title]: true }));
         if (["Start Task", "Join Again", "Failed"].includes(currentText)) {
           setButtonText(prev => ({ ...prev, [taskId]: "Checking..." }));
           window.open(task.url, "_blank");
@@ -496,6 +500,7 @@ export default function TasksPage() {
         if (gameCompleted || (userTasks[taskId] === false) || currentText === "Claim") {
           executeClaim(task);
         } else {
+          if (tg) tg.showAlert("Debug: Navigating to Game...");
           navigate("/game");
         }
         break;
@@ -503,11 +508,13 @@ export default function TasksPage() {
       case "news":
         if (!isTaskDone(task) || currentText === "Claim") {
           if (newsCount < 5) {
+            if (tg) tg.showAlert("Debug: Navigating to News...");
             navigate("/news");
             return;
           }
           executeClaim(task);
         } else {
+          if (tg) tg.showAlert("Debug: Navigating to News (Already done?)...");
           navigate("/news");
           if (newsCount >= 5) {
             // Local UI update to enable claim if we just returned
@@ -539,6 +546,9 @@ export default function TasksPage() {
           }
         }
         break;
+
+      default:
+        if (tg) tg.showAlert(`Debug: Unhandled task type: ${task.type}`);
     }
   };
 
