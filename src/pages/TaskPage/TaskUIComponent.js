@@ -496,19 +496,22 @@ export default function TasksPage() {
         if (gameCompleted || (userTasks[taskId] === false) || currentText === "Claim") {
           executeClaim(task);
         } else {
-          navigate("/game");
+          // OPTIMIZATION: Immediate navigation
+          setTimeout(() => navigate("/game"), 0);
         }
         break;
 
       case "news":
         if (!isTaskDone(task) || currentText === "Claim") {
           if (newsCount < 5) {
-            navigate("/news");
+            // OPTIMIZATION: Immediate navigation
+            setTimeout(() => navigate("/news"), 0);
             return;
           }
           executeClaim(task);
         } else {
-          navigate("/news");
+          // OPTIMIZATION: Immediate navigation
+          setTimeout(() => navigate("/news"), 0);
           if (newsCount >= 5) {
             // Local UI update to enable claim if we just returned
             update(userTasksRef, { [taskId]: false });
