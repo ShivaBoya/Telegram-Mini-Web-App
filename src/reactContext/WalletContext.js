@@ -254,7 +254,7 @@ export const WalletProvider = ({ children }) => {
   };
 
   // Connect wallet
-  const connectWallet = async (userId) => {
+  const connectWallet = React.useCallback(async (userId) => {
     if (!tonConnectUIRef.current) return;
 
     try {
@@ -272,10 +272,10 @@ export const WalletProvider = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   // Disconnect wallet
-  const disconnectWallet = async () => {
+  const disconnectWallet = React.useCallback(async () => {
     if (!tonConnectUIRef.current) return;
 
     try {
@@ -287,10 +287,10 @@ export const WalletProvider = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   // Expose methods and state to components
-  const value = {
+  const value = React.useMemo(() => ({
     isConnected,
     walletAddress,
     tonBalance,
@@ -299,7 +299,16 @@ export const WalletProvider = ({ children }) => {
     connectWallet,
     disconnectWallet,
     isLoading
-  };
+  }), [
+    isConnected,
+    walletAddress,
+    tonBalance,
+    usdEquivalent,
+    transactions,
+    connectWallet,
+    disconnectWallet,
+    isLoading
+  ]);
 
   return (
     <WalletContext.Provider value={value}>

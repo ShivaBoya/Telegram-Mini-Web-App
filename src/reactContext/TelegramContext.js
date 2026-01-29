@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useMemo } from "react";
 import { database } from "../services/FirebaseConfig.js";
 import { ref, onValue, off } from "firebase/database";
 
@@ -53,8 +53,10 @@ export const TelegramProvider = ({ children }) => {
     return () => off(scoreRef, "value", unsubscribe);
   }, [user.id]);
 
+  const value = useMemo(() => ({ user, scores }), [user, scores]);
+
   return (
-    <TelegramContext.Provider value={{ user, scores }}>
+    <TelegramContext.Provider value={value}>
       {children}
     </TelegramContext.Provider>
   );
@@ -68,4 +70,3 @@ export const useTelegram = () => {
   }
   return context;
 };
-

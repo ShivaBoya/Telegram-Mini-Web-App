@@ -162,10 +162,10 @@ export const ReferralProvider = ({ children }) => {
 
 
 
-  const shareToTelegram = () => window.open(`https://t.me/share/url?url=${encodeURIComponent(inviteLink)}&text=${encodeURIComponent('Join me and earn rewards!')}`, '_blank');
-  const shareToWhatsApp = () => window.open(`https://wa.me/?text=${encodeURIComponent(`Join me and earn rewards! ${inviteLink}`)}`, '_blank');
-  const shareToTwitter = () => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Join me and earn rewards! ${inviteLink}`)}`, '_blank');
-  const copyToClipboard = async () => {
+  const shareToTelegram = React.useCallback(() => window.open(`https://t.me/share/url?url=${encodeURIComponent(inviteLink)}&text=${encodeURIComponent('Join me and earn rewards!')}`, '_blank'), [inviteLink]);
+  const shareToWhatsApp = React.useCallback(() => window.open(`https://wa.me/?text=${encodeURIComponent(`Join me and earn rewards! ${inviteLink}`)}`, '_blank'), [inviteLink]);
+  const shareToTwitter = React.useCallback(() => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Join me and earn rewards! ${inviteLink}`)}`, '_blank'), [inviteLink]);
+  const copyToClipboard = React.useCallback(async () => {
     try {
       await navigator.clipboard.writeText(inviteLink);
       return true;
@@ -173,19 +173,29 @@ export const ReferralProvider = ({ children }) => {
       console.error('Failed to copy: ', err);
       return false;
     }
-  };
+  }, [inviteLink]);
+
+  const value = React.useMemo(() => ({
+    inviteLink,
+    invitedFriends,
+    shareToTelegram,
+    shareToWhatsApp,
+    shareToTwitter,
+    copyToClipboard,
+    showWelcomePopup,
+    setShowWelcomePopup
+  }), [
+    inviteLink,
+    invitedFriends,
+    showWelcomePopup,
+    shareToTelegram,
+    shareToWhatsApp,
+    shareToTwitter, // Now stable via useCallback
+    copyToClipboard
+  ]);
 
   return (
-    <ReferralContext.Provider value={{
-      inviteLink,
-      invitedFriends,
-      shareToTelegram,
-      shareToWhatsApp,
-      shareToTwitter,
-      copyToClipboard,
-      showWelcomePopup,
-      setShowWelcomePopup
-    }}>
+    <ReferralContext.Provider value={value}>
       {children}
     </ReferralContext.Provider>
   );

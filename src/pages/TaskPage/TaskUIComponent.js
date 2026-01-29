@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { ChevronLeft, Award, Zap, Users, Wallet, CheckSquare, BookOpen, PlayCircle, Send, Twitter, X } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
@@ -6,6 +6,7 @@ import { Badge } from "../../components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@radix-ui/react-tabs";
 import { Progress } from "../../components/ui/progress.js";
 import { useTelegram } from "../../reactContext/TelegramContext";
+import { useReferral } from "../../reactContext/ReferralContext";
 import { useNavigate } from "react-router-dom";
 import { database } from "../../services/FirebaseConfig";
 import { ref, onValue, runTransaction, update } from "firebase/database";
@@ -15,6 +16,7 @@ const BOT_TOKEN = process.env.REACT_APP_BOT_TOKEN;
 export default function TasksPage() {
 
   const { user, scores } = useTelegram();
+  const { invitedFriends } = useReferral();
   const [tasks, setTasks] = useState([]);
   const [filterType, setFilterType] = useState("all");
   const navigate = useNavigate();
@@ -167,7 +169,7 @@ export default function TasksPage() {
   const scoreData = localScores || scores;
   const displayTaskScore = isToday(scoreData?.task_updated_at) ? (scoreData?.task_score || 0) : 0;
 
-  const IconMap = {
+  const IconMap = useMemo(() => ({
     Zap: <Zap className="h-5 w-5 text-indigo-300" />,
     Award: <Award className="h-5 w-5 text-pink-300" />,
     Users: <Users className="h-5 w-5 text-amber-300" />,
@@ -177,7 +179,7 @@ export default function TasksPage() {
     PlayCircle: <PlayCircle className="h-5 w-5 text-purple-300" />,
     Send: <Send className="h-5 w-5 text-blue-400" />,
     Twitter: <Twitter className="h-5 w-5 text-sky-400" />,
-  };
+  }), []);
 
   // Use `points` as primary reward â€” fallback to `score`, then 100
   // Use `points` as primary reward â€” fallback to `score`, then 100
@@ -185,7 +187,8 @@ export default function TasksPage() {
   const weeklyDaysCompleted = weeklyProgressData?.current_week_days || 0;
 
 
-  const mapTask = (task) => {
+  // Wrap mapTask in useCallback to be stable for useMemo
+  const mapTask = useCallback((task) => {
     // Check points, then score, then default to 100
     // Ensure it's treated as a number
     const rawReward = task.points !== undefined ? task.points : (task.score !== undefined ? task.score : 100);
@@ -203,6 +206,9 @@ export default function TasksPage() {
     } else if (task.title && task.title.toLowerCase().includes('daily tasks')) {
       // 7-day streak task
       completedVal = weeklyDaysCompleted;
+    } else if (task.title && (task.title.toLowerCase().includes('invite') || task.title.toLowerCase().includes('refer'))) {
+      // Referral Task
+      completedVal = invitedFriends ? invitedFriends.length : 0;
     } else if (task.title && task.title.toLowerCase().includes('points')) {
       // 500 points task - Ensure we use the weeklyPoints logic (which draws from scoreData.weekly_points)
       // scoreData is 'localScores' which we update in the transaction now.
@@ -211,15 +217,17 @@ export default function TasksPage() {
 
     return {
       ...task,
-      type: (task.title && task.title.toLowerCase().includes('news')) ? 'news' : task.type,
+      type: (task.title && task.title.toLowerCase().includes('news')) ? 'news' :
+        (task.title && (task.title.toLowerCase().includes('invite') || task.title.toLowerCase().includes('refer'))) ? 'referral' :
+          task.type,
       points: reward, // Normalize to `points` for consistency
       completed: completedVal,
       icon: iconKey ? IconMap[iconKey] : (IconMap['Zap'] || <Zap className="h-5 w-5 text-indigo-300" />),
       iconBg: task.iconBg || "bg-indigo-500/30",
     };
-  };
+  }, [newsCount, weeklyDaysCompleted, invitedFriends, scoreData, IconMap]);
 
-  const processedTasks = tasks.map(mapTask);
+  const processedTasks = useMemo(() => tasks.map(mapTask), [tasks, mapTask]);
 
   const dailyTasks = processedTasks.filter(
     (task) => (task.category === 'daily' || task.category === 'standard' || (!task.category && !['weekly', 'achievements'].includes(task.type)))
@@ -521,7 +529,8 @@ export default function TasksPage() {
         break;
 
       case "weekly":
-        // Logic for Weekly Claim
+      case "referral":
+        // Logic for Weekly or Referral Claim
         if (!isTaskDone(task)) {
           // Verify completion requirement using the mapped 'completed' value
           // task.completed is set in mapTask
