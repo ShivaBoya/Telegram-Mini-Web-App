@@ -80,29 +80,34 @@ export const ReferralProvider = ({ children }) => {
 
     // Try to get the param from Telegram SDK
     let startParam = tg.initDataUnsafe?.start_param;
+    console.log('[Referral] Raw startParam:', startParam);
 
     // FALLBACK: If not found in SDK, check URL parameters (e.g. ?tgWebAppStartParam=...)
     if (!startParam) {
       const urlParams = new URL(window.location.href).searchParams;
       startParam = urlParams.get('tgWebAppStartParam');
+      console.log('[Referral] URL startParam:', startParam);
     }
 
     const referredId = tg.initDataUnsafe?.user?.id;
+    console.log('[Referral] Current User ID (Referred):', referredId);
 
     if (!startParam || !referredId) {
+      console.log('[Referral] Missing startParam or referredId');
       return;
     }
 
-    /* last "_" split */
+    /* Expected format: ref_CODE_USERID */
     const parts = startParam.split('_');
     const referrerId = parts[2];
-    console.log('[Referral] referrerId:', referrerId);
+    console.log('[Referral] Extracted referrerId:', referrerId);
 
     if (!referrerId || referrerId === String(referredId)) {
+      console.log('[Referral] Invalid referrerId (or self-referral)');
       return;
     }
 
-    const key = `referred_${referredId}`;
+    const key = `referred_${referredId}_${referrerId}`; // Made key unique to referrer-referred pair
     if (localStorage.getItem(key)) {
       console.log('[Referral] LocalStorage flag already set → abort');
       return;
@@ -113,11 +118,12 @@ export const ReferralProvider = ({ children }) => {
       .then(() => {
         console.log('[Referral] addReferralRecord resolved – show popup');
         localStorage.setItem(key, 'done');
-        setShowWelcomePopup(true)
+        setShowWelcomePopup(true);
+        // Optional: Show alert for testing
+        // tg.showAlert(`Referral processed! You were invited by ${referrerId}`);
       })
       .catch(err => {
         console.error('[Referral] addReferralRecord rejected:', err);
-        tg.showAlert('Could not save referral, please try again later.');
       });
 
   }, [user.id, addReferralRecord]);
