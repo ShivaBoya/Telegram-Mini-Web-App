@@ -45,8 +45,7 @@ export default function TasksPage() {
   const [localScores, setLocalScores] = useState(null);
   const [weeklyProgressData, setWeeklyProgressData] = useState(null);
 
-  const userTasksRef = ref(database, `connections/${user.id}`);
-  const userScoreRef = ref(database, `users/${user.id}/Score`);
+
   const userId = user.id;
 
   const isToday = (timestamp) => {
@@ -108,6 +107,9 @@ export default function TasksPage() {
     const tasksRef = ref(database, "tasks");
     const gameTaskRef = ref(database, `connections/${user.id}/tasks/daily/game`);
     const newsRef = ref(database, `connections/${user.id}/tasks/daily/news`);
+    const userTasksRef = ref(database, `connections/${user.id}`);
+    const userScoreRef = ref(database, `users/${user.id}/Score`);
+    const weeklyProgressRef = ref(database, `users/${user.id}/weekly_progress`);
 
     const unsubscribeTasks = onValue(tasksRef, (snapshot) => {
       // Logic from lines 52-62
@@ -145,7 +147,6 @@ export default function TasksPage() {
       }
     });
 
-    const weeklyProgressRef = ref(database, `users/${user.id}/weekly_progress`);
     const unsubscribeWeekly = onValue(weeklyProgressRef, (snapshot) => {
       if (snapshot.exists()) {
         // Map this to a local state if needed, or we just rely on it updating 'scores' if we put it there?
@@ -163,7 +164,7 @@ export default function TasksPage() {
       unsubscribeScores();
       unsubscribeWeekly();
     };
-  }, [user.id, userTasksRef, userScoreRef]);
+  }, [user.id]);
 
   // Use localScores for real-time updates, fallback to context
   const scoreData = localScores || scores;
@@ -304,6 +305,7 @@ export default function TasksPage() {
         const isMember = ["member", "administrator", "creator"].includes(status);
 
         if (isMember) {
+          const userTasksRef = ref(database, `connections/${user.id}`);
           await update(userTasksRef, { [taskId]: false });
           setButtonText(prev => ({ ...prev, [taskId]: "Claim" }));
           clearInterval(interval);
@@ -346,6 +348,7 @@ export default function TasksPage() {
         const taskPoints = Number(taskObj.points) || 0;
 
         // 1. Transactional Score Update (Prevents Race Conditions)
+        const userScoreRef = ref(database, `users/${user.id}/Score`);
         const scoreTransactionResult = await runTransaction(userScoreRef, (currentScoreData) => {
           if (!currentScoreData) {
             return {
@@ -863,6 +866,7 @@ export default function TasksPage() {
                 disabled={videoTimer > 0}
                 onClick={async () => {
                   if (activeTaskId) {
+                    const userTasksRef = ref(database, `connections/${user.id}`);
                     await update(userTasksRef, { [activeTaskId]: false });
                     setButtonText(prev => ({ ...prev, [activeTaskId]: "Claim" }));
                   }

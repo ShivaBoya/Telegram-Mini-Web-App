@@ -5,18 +5,18 @@ import { Users, Award, Wallet, SquareCheckBig, Newspaper } from "lucide-react";
 
 const Navbar = () => {
   const navigate = useNavigate()
-  const goHome = () => navigate("/");
-  const goGame = () => navigate("/tasks");
-  const goWallet = () => navigate("/wallet");
-  const goNetwork = () => navigate("/network");
-  const goNews = () => navigate("/news");
+  const goHome = () => navigate("/", { replace: true });
+  const goGame = () => navigate("/tasks", { replace: true });
+  const goWallet = () => navigate("/wallet", { replace: true });
+  const goNetwork = () => navigate("/network", { replace: true });
+  const goNews = () => navigate("/news", { replace: true });
 
   const location = useLocation();
 
   const getActiveClass = (path) =>
     location.pathname === path ? "text-indigo-400" : "text-white/60";
   return (
-    <nav className="absolute w-full bottom-0 bg-black/30 backdrop-blur-md border-t z-50 border-white/20 grid grid-cols-5 p-0.5">
+    <nav className="fixed w-full bottom-0 bg-black/90 border-t z-50 border-white/20 grid grid-cols-5 p-0.5 pb-safe">
       <Button
         variant="ghost"
         onClick={goHome}

@@ -274,7 +274,7 @@ function App() {
         <HistoryProvider>
           <StreakTracker>
             <>
-              <div className="App mb-3 flex flex-col min-h-screen">
+              <div className="App mb-3 flex flex-col min-h-screen pb-20">
                 <AdminNavbar />
                 <div className="content flex-1">
                   <Routes>
