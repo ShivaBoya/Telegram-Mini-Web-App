@@ -12,6 +12,7 @@ import {
   CheckSquare,
   GamepadIcon,
   Bell,
+  ThumbsUp,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
@@ -42,65 +43,21 @@ export default function HomeComponent() {
 
   // const [newsCount, setNewsCount] = useState(0); // newsCount is used
   const [newsCount, setNewsCount] = useState(0);
-  const [currentNewsIndex] = useState(0); // Removed setter to fix unused warning if logic is missing
+
   const [farmingProgress] = useState(0); // Removed setter
   const [isFarming] = useState(false); // Removed setter
 
-  // Mock news data
-  const newsItems = [
-    {
-      id: 1,
-      title: "TON Blockchain Adoption Surges Among Developers",
-      summary:
-        "The Open Network (TON) is seeing unprecedented growth in developer activity as more applications are being built on the blockchain.",
-      category: "Development",
-      imageUrl: "https://i.postimg.cc/sDzjfdS0/Ton-Image.jpg",
-      readTime: "4 min",
-    },
-    {
-      id: 2,
-      title: "Ethereum Layer 2 Solutions See Record Growth",
-      summary:
-        "Layer 2 scaling solutions on Ethereum have reached an all-time high in total value locked, with Arbitrum and Optimism leading the charge.",
-      category: "Blockchain",
-      imageUrl:
-        "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/StockCake-Ethereum%27s%20Digital%20Glow_1742209026.jpg-5LEdYRUDNMmXP3kO8VQLYl4bo7nnTL.jpeg",
-      readTime: "3 min",
-    },
-    {
-      id: 3,
-      title: "New NFT Collection Raises $10M for Charity",
-      summary:
-        "A new NFT collection featuring digital art from renowned artists has raised over $10 million for environmental conservation efforts.",
-      category: "NFTs",
-      imageUrl: "https://i.postimg.cc/59XXZV1c/NFT-Image.jpg",
-      readTime: "2 min",
-    },
 
-    {
-      id: 4,
-      title: "Bitcoin Mining Becomes More Sustainable",
-      summary:
-        "Major Bitcoin mining operations are transitioning to renewable energy sources, addressing environmental concerns about cryptocurrency mining.",
-      category: "Sustainability",
-      imageUrl: "https://i.postimg.cc/DyGXHThj/Bit-Coin-Image.jpg",
-      readTime: "5 min",
-    },
-    {
-      id: 5,
-      title: "DeFi Protocol Launches Cross-Chain Bridge",
-      summary:
-        "A popular DeFi protocol has launched a new cross-chain bridge allowing users to transfer assets between multiple blockchains with minimal fees.",
-      category: "DeFi",
-      imageUrl: "https://i.postimg.cc/kM0shCzG/Defi-Image.jpg",
-      readTime: "3 min",
-    },
-  ]
+
+  // Fetch Top News
+  const [topNews, setTopNews] = useState(null);
 
   useEffect(() => {
     const tasksRef = ref(database, "tasks");
     const userTasksRef = ref(database, `connections/${user.id}`);
     const newsRef = ref(database, `connections/${user.id}/tasks/daily/news`);
+    // Query news to find top liked
+    const allNewsRef = ref(database, "news");
 
     const unsubscribeTasks = onValue(tasksRef, (snapshot) => {
       if (snapshot.exists()) {
@@ -127,10 +84,30 @@ export default function HomeComponent() {
       setNewsCount(snapshot.exists() ? Object.keys(snapshot.val() || {}).length : 0);
     });
 
+    const unsubscribeTopNews = onValue(allNewsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        const newsArray = Object.entries(data).map(([key, item]) => ({
+          ...item,
+          id: key,
+          likes: item.likes || 0
+        }));
+
+        // Sort by likes descending
+        newsArray.sort((a, b) => b.likes - a.likes);
+
+        // Set top news (first item)
+        if (newsArray.length > 0) {
+          setTopNews(newsArray[0]);
+        }
+      }
+    });
+
     return () => {
       unsubscribeTasks();
       unsubscribeUserTasks();
       unsubscribeNews();
+      unsubscribeTopNews();
     };
   }, [user.id]);
 
@@ -383,61 +360,49 @@ export default function HomeComponent() {
             {/* Scrollable Content Below */}
             <div className="mt-6">
               {/* News Swipe Card */}
-              <h2 className="text-white-visible text-xl font-bold mb-3 text-white drop-shadow-lg">Today's Top Stories</h2>
-              <motion.div
-                key={currentNewsIndex}
-                initial={{ opacity: 0, x: 100 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -100 }}
-                className="mb-6 cursor-pointer"
-                onClick={goNews}
-
-              >
-                <Card className="rounded-none overflow-hidden border-none shadow-lg bg-white/10 backdrop-blur-md">
-                  <div className="relative">
-                    <img
-                      src={newsItems[currentNewsIndex].imageUrl || "/placeholder.svg"}
-                      alt={newsItems[currentNewsIndex].title}
-                      className="w-full h-48 object-cover"
-                    />
-                    <Badge className="absolute top-3 left-3 bg-indigo-600 text-gray-100 rounded px-1 py-1">
-                      {newsItems[currentNewsIndex].category}
-                    </Badge>
-                    <Badge className="absolute top-3 right-3 bg-gray-700/70 text-gray-100 rounded px-1 py-1">
-                      {newsItems[currentNewsIndex].readTime}
-                    </Badge>
-                  </div>
-                  <CardContent className="p-4">
-                    <h3 className="text-lg font-bold mb-2 text-white">
-                      {newsItems[currentNewsIndex].title}
-                    </h3>
-                    <p className="text-white/80 text-sm mb-4">
-                      {newsItems[currentNewsIndex].summary}
-                    </p>
-                    <div className="flex justify-between items-center">
-                      {/* <span className="text-xs text-white/60">Swipe to interact</span> */}
-                      {/* <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="border-red-300/50 text-black-300 hover:bg-red-500/20"
-                          onClick={() => handleSwipe("left")}
-                        >
-                          Skip
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="border-green-300/50 text-black-300 hover:bg-green-500/20"
-                          onClick={() => handleSwipe("right")}
-                        >
-                          Interesting
-                        </Button>
-                      </div> */}
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
+              {topNews && (
+                <>
+                  <h2 className="text-white-visible text-xl font-bold mb-3 text-white drop-shadow-lg">Today's Top Story</h2>
+                  <motion.div
+                    initial={{ opacity: 0, x: 100 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -100 }}
+                    className="mb-6 cursor-pointer"
+                    onClick={goNews}
+                  >
+                    <Card className="rounded-none overflow-hidden border-none shadow-lg bg-white/10 backdrop-blur-md">
+                      <div className="relative">
+                        <img
+                          src={topNews.imageUrl || "/placeholder.svg"}
+                          alt={topNews.title}
+                          className="w-full h-48 object-cover"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = "/placeholder.svg";
+                          }}
+                        />
+                        <Badge className="absolute top-3 left-3 bg-indigo-600 text-gray-100 rounded px-1 py-1">
+                          {topNews.category || "News"}
+                        </Badge>
+                        <Badge className="absolute top-3 right-3 bg-gray-700/70 text-gray-100 rounded px-1 py-1 flex items-center gap-1">
+                          <ThumbsUp className="h-3 w-3 text-green-400" /> {topNews.likes || 0} Likes
+                        </Badge>
+                      </div>
+                      <CardContent className="p-4">
+                        <h3 className="text-lg font-bold mb-2 text-white">
+                          {topNews.title}
+                        </h3>
+                        <p className="text-white/80 text-sm mb-4 line-clamp-2">
+                          {topNews.summary}
+                        </p>
+                        <div className="flex justify-between items-center">
+                          {/* <span className="text-xs text-white/60">Swipe to interact</span> */}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                </>
+              )}
 
               {/* Quick Access Sections */}
               <h2 className="text-xl font-bold mb-3 text-white drop-shadow-lg">Quick Access</h2>

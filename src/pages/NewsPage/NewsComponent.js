@@ -10,7 +10,7 @@ import { Card, CardContent } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
 import { motion, useAnimation } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ref, query, orderByChild, onValue, update, get } from "firebase/database";
+import { ref, query, orderByChild, onValue, update, get, runTransaction } from "firebase/database";
 import { database } from "../../services/FirebaseConfig";
 import { useTelegram } from "../../reactContext/TelegramContext";
 
@@ -100,6 +100,14 @@ export default function NewsComponent() {
         updates.news_score = (userData?.news_score || 0) + 5;
         updates.total_score = (userData?.total_score || 0) + 5;
         await update(userRef, updates);
+      }
+
+      // If user liked (swiped right), increment likes on the news item
+      if (dir === "right") {
+        const newsLikesRef = ref(database, `news/${currentNews.id}/likes`);
+        await runTransaction(newsLikesRef, (currentLikes) => {
+          return (currentLikes || 0) + 1;
+        });
       }
 
       // Animate swipe
