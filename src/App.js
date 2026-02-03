@@ -135,7 +135,7 @@
 
 
 import React, { useEffect } from 'react';
-import { Route, Routes, useLocation, Link } from 'react-router-dom';
+import { Route, Routes, useLocation, Link, Navigate } from 'react-router-dom';
 import './App.css';
 import AdminTask from './pages/AdminTask';
 import AdminNews from './pages/AdminNews';
@@ -274,7 +274,7 @@ function App() {
         <HistoryProvider>
           <StreakTracker>
             <>
-              <div className="App mb-3 flex flex-col min-h-screen pb-20">
+              <div className="App mb-3 flex flex-col min-h-screen pb-20 bg-black">
                 <AdminNavbar />
                 <div className="content flex-1">
                   <Routes>
@@ -288,6 +288,7 @@ function App() {
                     <Route path="/wallet" element={<WalletComponent />} />
                     <Route path="/admintask" element={<AdminTask />} />
                     <Route path="/adminNews" element={<AdminNews />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </div>
                 {shouldShowNavbar && <Navbar />}

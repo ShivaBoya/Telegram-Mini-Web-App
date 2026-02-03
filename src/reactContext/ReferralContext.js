@@ -136,7 +136,7 @@ export const ReferralProvider = ({ children }) => {
 
       // BotFather is configured! We can now use 'startapp' for correct tracking.
       // Format: https://t.me/BOT_USERNAME?startapp=ref_CODE_USERID
-      setInviteLink(`https://t.me/${botUsername}?start=ref_${code}_${user.id}`);
+      setInviteLink(`https://t.me/${botUsername}/app?startapp=ref_${code}_${user.id}`);
     }
   }, [user?.id]);
 
