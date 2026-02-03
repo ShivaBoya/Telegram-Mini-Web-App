@@ -89,7 +89,7 @@ export default function TasksPage() {
       return !!status;
     }
 
-    const RESET_TYPES = ['game', 'news', 'partnership'];
+    const RESET_TYPES = ['game', 'news', 'partnership', 'referral'];
     if (RESET_TYPES.includes(type)) {
       // Legacy 'true' means old data -> Expired/Reset
       if (status === true) return false;
@@ -208,7 +208,13 @@ export default function TasksPage() {
       completedVal = weeklyDaysCompleted;
     } else if (task.title && (task.title.toLowerCase().includes('invite') || task.title.toLowerCase().includes('refer'))) {
       // Referral Task
-      completedVal = invitedFriends ? invitedFriends.length : 0;
+      // IF it is a DAILY referral task, filter by date
+      if (task.category === 'daily') {
+        completedVal = invitedFriends ? invitedFriends.filter(f => isToday(f.referralDate)).length : 0;
+      } else {
+        // Standard cumulative referral task
+        completedVal = invitedFriends ? invitedFriends.length : 0;
+      }
     } else if (task.title && task.title.toLowerCase().includes('points')) {
       // 500 points task - Ensure we use the weeklyPoints logic (which draws from scoreData.weekly_points)
       // scoreData is 'localScores' which we update in the transaction now.
@@ -250,29 +256,29 @@ export default function TasksPage() {
     }
   };
 
-  const handleChatId = async () => {
+  const handleChatId = async (url) => {
+    if (!url) return { chatId: null };
     try {
-      const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getUpdates`);
-      const data = await response.json();
-      if (data.ok) {
-        const chatUpdate = data.result.find(update => update.my_chat_member);
-        if (chatUpdate) {
-          const chat = chatUpdate.my_chat_member.chat;
-          return { chatId: chat.id, chatType: chat.type };
-        }
+      // Extract username from t.me/username or telegram.me/username
+      // Handle both simple usernames and joinchat links (though joinchat is harder, usually public channels use username)
+      const match = url.match(/(?:t\.me|telegram\.me)\/([^/?]+)/);
+      if (match && match[1]) {
+        // If it's a join link (starts with +), we technically can't check via API easily without user ID being known to bot in that chat
+        // But for public channels @username works.
+        return { chatId: `@${match[1]}` };
       }
-      return { chatId: null, chatType: null };
+      return { chatId: null };
     } catch (err) {
-      console.error("Error fetching chat ID:", err);
-      return { chatId: null, chatType: null };
+      console.error("Error parsing chat ID:", err);
+      return { chatId: null };
     }
   };
 
-  const startMembershipCheck = async (taskId, chatId, chatType) => {
+  const startMembershipCheck = async (taskId, chatId) => {
     let checkCount = 0;
     const interval = setInterval(async () => {
       checkCount += 1;
-      if (!chatId || !chatType) {
+      if (!chatId) {
         setButtonText(prev => ({ ...prev, [taskId]: "Failed" }));
         clearInterval(interval);
         return;
@@ -280,27 +286,34 @@ export default function TasksPage() {
 
       const chatMember = await fetchChatMember(chatId, user.id);
       if (!chatMember || !chatMember.status) {
-        setButtonText(prev => ({ ...prev, [taskId]: "Failed" }));
-        clearInterval(interval);
-        return;
+        // converting @username to id might fail if bot isn't admin or channel is private
+        // But for public channels it should work if bot is just added
+        // If failed, maybe keep trying or just fail? 
+        // Failing fast is better than hanging.
+        // Actually, if bot hasn't seen the chat, it returns 400.
+        // so chatMember will be null.
+        // We act as if failed.
+        // setButtonText(prev => ({ ...prev, [taskId]: "Failed" }));
+        // clearInterval(interval);
+        // return;
+        // Wait, maybe loop a few times incase of network glitch?
       }
 
-      let isMember = false;
-      const { status } = chatMember;
-      if (["group", "supergroup"].includes(chatType)) {
-        isMember = ["member", "administrator", "creator"].includes(status);
-      } else if (chatType === "channel") {
-        isMember = status === "member";
-      }
+      if (chatMember && chatMember.status) {
+        const { status } = chatMember;
+        const isMember = ["member", "administrator", "creator"].includes(status);
 
-      if (isMember) {
-        await update(userTasksRef, { [taskId]: false });
-        setButtonText(prev => ({ ...prev, [taskId]: "Claim" }));
-        clearInterval(interval);
+        if (isMember) {
+          await update(userTasksRef, { [taskId]: false });
+          setButtonText(prev => ({ ...prev, [taskId]: "Claim" }));
+          clearInterval(interval);
+          return;
+        }
       } else {
-        setButtonText(prev => ({ ...prev, [taskId]: "Join Again" }));
-        clearInterval(interval);
+        // If chatMember is null (API error), we count it as a fail or just wait?
       }
+
+      // Update text to "Checking..." is already set.
 
       if (checkCount >= 100) {
         setButtonText(prev => ({ ...prev, [taskId]: "Failed" }));
@@ -485,8 +498,8 @@ export default function TasksPage() {
         if (["Start Task", "Join Again", "Failed"].includes(currentText)) {
           setButtonText(prev => ({ ...prev, [taskId]: "Checking..." }));
           window.open(task.url, "_blank");
-          const { chatId, chatType } = await handleChatId();
-          startMembershipCheck(taskId, chatId, chatType);
+          const { chatId } = await handleChatId(task.url);
+          startMembershipCheck(taskId, chatId);
         } else if (currentText === "Claim" && !isTaskDone(task)) {
           executeClaim(task);
         }

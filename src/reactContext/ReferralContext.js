@@ -50,7 +50,8 @@ export const ReferralProvider = ({ children }) => {
     const exists = Object.values(list).includes(referredId);
     if (exists) return;
     const idx = Object.keys(list).length + 1;
-    await update(refRef, { [idx]: referredId });
+    // Store as object with timestamp for daily tracking
+    await update(refRef, { [idx]: { id: referredId, timestamp: Date.now() } });
 
     // Store "Referred By" details in the new user's record
     const referredUserRef = ref(database, `users/${referredId}`);
@@ -147,12 +148,22 @@ export const ReferralProvider = ({ children }) => {
     const referralsRef = ref(database, `users/${user.id}/referrals`);
     const unsub = onValue(referralsRef, async snapshot => {
       const data = snapshot.val() || {};
-      const ids = Object.values(data);
+      const values = Object.values(data);
       const list = await Promise.all(
-        ids.map(async id => {
-          const snap = await get(ref(database, `users/${id}`));
+        values.map(async item => {
+          // Backward compatibility: item might be a string (old ID) or object { id, timestamp }
+          const friendId = typeof item === 'object' ? item.id : item;
+          const referralDate = typeof item === 'object' ? item.timestamp : null;
+
+          const snap = await get(ref(database, `users/${friendId}`));
           const u = snap.val();
-          return { id, name: u.name || 'Unknown', points: u.Score?.network_score || 0, status: u.status || 'active' };
+          return {
+            id: friendId,
+            name: u.name || 'Unknown',
+            points: u.Score?.network_score || 0,
+            status: u.status || 'active',
+            referralDate: referralDate // Include date for filtering
+          };
         })
       );
       setInvitedFriends(list);
