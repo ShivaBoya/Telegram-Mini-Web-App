@@ -149,38 +149,11 @@ export default function NewsComponent() {
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
       {/* Background Pattern */}
+      {/* Background Pattern - Optimized */}
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/90 via-purple-600/80 to-pink-600/90 z-0">
-        <div className="absolute inset-0 opacity-20">
-          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <pattern id="smallGrid" width="20" height="20" patternUnits="userSpaceOnUse">
-                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="white" strokeWidth="0.5" opacity="0.5" />
-              </pattern>
-              <pattern id="grid" width="80" height="80" patternUnits="userSpaceOnUse">
-                <rect width="80" height="80" fill="url(#smallGrid)" />
-                <path d="M 80 0 L 0 0 0 80" fill="none" stroke="white" strokeWidth="1" opacity="0.8" />
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#grid)" />
-          </svg>
-        </div>
-
-        <div className="absolute top-[10%] left-[20%] w-20 h-20 rounded-full bg-gradient-to-r from-blue-400 to-indigo-400 opacity-20 blur-xl animate-float"></div>
-        <div className="absolute top-[60%] right-[15%] w-24 h-24 rounded-full bg-gradient-to-r from-purple-400 to-pink-400 opacity-20 blur-xl animate-float-delayed"></div>
-        <div className="absolute bottom-[20%] left-[30%] w-16 h-16 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 opacity-20 blur-xl animate-float-slow"></div>
-
-        <div className="absolute inset-0 opacity-30">
-          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-            <path d="M0,100 C150,50 250,150 400,100" stroke="white" strokeWidth="0.5" fill="none" />
-            <path d="M0,200 C150,150 250,250 400,200" stroke="white" strokeWidth="0.5" fill="none" />
-            <path d="M0,300 C150,250 250,350 400,300" stroke="white" strokeWidth="0.5" fill="none" />
-            <path d="M0,400 C150,350 250,450 400,400" stroke="white" strokeWidth="0.5" fill="none" />
-            <path d="M0,500 C150,450 250,550 400,500" stroke="white" strokeWidth="0.5" fill="none" />
-            <path d="M0,600 C150,550 250,650 400,600" stroke="white" strokeWidth="0.5" fill="none" />
-            <path d="M0,700 C150,650 250,750 400,700" stroke="white" strokeWidth="0.5" fill="none" />
-            <path d="M0,800 C150,750 250,850 400,800" stroke="white" strokeWidth="0.5" fill="none" />
-          </svg>
-        </div>
+        <div className="absolute top-[10%] left-[20%] w-20 h-20 rounded-full bg-gradient-to-r from-blue-400 to-indigo-400 opacity-20 blur-xl"></div>
+        <div className="absolute top-[60%] right-[15%] w-24 h-24 rounded-full bg-gradient-to-r from-purple-400 to-pink-400 opacity-20 blur-xl"></div>
+        <div className="absolute bottom-[20%] left-[30%] w-16 h-16 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 opacity-20 blur-xl"></div>
       </div>
 
       {/* App Content */}

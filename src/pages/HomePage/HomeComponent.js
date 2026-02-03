@@ -157,15 +157,13 @@ export default function HomeComponent() {
     <div className="flex justify-center items-center min-h-screen  bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800">
       {/* Animated Background Elements */}
       <div className="absolute inset-0 overflow-hidden">
-        {/* Floating circles */}
-        <div className="absolute top-[10%] left-[15%] w-32 h-32 rounded-full bg-blue-500/10 blur-xl animate-pulse"></div>
+        {/* Floating circles - Removed animate-pulse for performance */}
+        <div className="absolute top-[10%] left-[15%] w-32 h-32 rounded-full bg-blue-500/10 blur-xl"></div>
         <div
-          className="absolute top-[40%] right-[10%] w-40 h-40 rounded-full bg-purple-500/10 blur-xl animate-pulse"
-          style={{ animationDelay: "1s" }}
+          className="absolute top-[40%] right-[10%] w-40 h-40 rounded-full bg-purple-500/10 blur-xl"
         ></div>
         <div
-          className="absolute bottom-[20%] left-[25%] w-36 h-36 rounded-full bg-pink-500/10 blur-xl animate-pulse"
-          style={{ animationDelay: "2s" }}
+          className="absolute bottom-[20%] left-[25%] w-36 h-36 rounded-full bg-pink-500/10 blur-xl"
         ></div>
 
         {/* Glowing lines */}
@@ -201,9 +199,9 @@ export default function HomeComponent() {
           </svg>
         </div>
 
-        {/* Particle effect */}
+        {/* Particle effect - Reduced count from 20 to 5 for performance */}
         <div className="absolute inset-0">
-          {Array.from({ length: 20 }).map((_, i) => (
+          {Array.from({ length: 5 }).map((_, i) => (
             <div
               key={i}
               className="absolute rounded-full bg-white/30"
