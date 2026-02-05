@@ -93,8 +93,13 @@ export default function HomeComponent() {
           likes: item.likes || 0
         }));
 
-        // Sort by likes descending
+        // Sort by likes descending initially
         newsArray.sort((a, b) => b.likes - a.likes);
+
+        // Fallback: If top news has 0 likes (or no likes), show the most recent news instead
+        if (newsArray.length > 0 && newsArray[0].likes <= 0) {
+          newsArray.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        }
 
         // Set top news (first item)
         if (newsArray.length > 0) {
