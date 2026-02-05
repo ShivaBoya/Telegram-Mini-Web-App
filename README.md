@@ -207,4 +207,4 @@ This is a private project. For any issues or suggestions, please contact the dev
 
 **Last Updated**: Octobar 2025  
 **Version**: 0.1.0  
-**Maintainer**: Raju VB
+**Maintainer**: Shiva B
