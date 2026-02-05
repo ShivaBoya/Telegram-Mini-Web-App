@@ -73,7 +73,9 @@ export default function TasksPage() {
 
   const isTaskDone = (task) => {
     const { id, type } = task;
-    const status = userTasks[id];
+    // Check both root location and tasks/daily subdirectory
+    const status = userTasks[id] || (userTasks.tasks?.daily?.[id]);
+
     if (status === undefined || status === null || status === false) return false;
 
     // Video Task Logic: Check for Admin updates (Video URL Change)
@@ -94,6 +96,7 @@ export default function TasksPage() {
       if (status === true) return false;
 
       if (typeof status === 'object' && status.lastClaimed) {
+        // Double check date, though App.js should wipe it.
         return isToday(status.lastClaimed);
       }
       return false;
@@ -397,7 +400,12 @@ export default function TasksPage() {
             ...extraData
           };
 
-          await update(ref(database, `connections/${user.id}/${taskId}`), claimData);
+          // Store in daily folder IF it's a daily task, ensuring auto-reset works
+          const claimPath = (taskObj.category === 'daily')
+            ? `connections/${user.id}/tasks/daily/${taskId}`
+            : `connections/${user.id}/${taskId}`;
+
+          await update(ref(database, claimPath), claimData);
 
           // Reset game task completed status after claiming to ensure daily cycle works properly
           if (taskObj.type === 'game') {
