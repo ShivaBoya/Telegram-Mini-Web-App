@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useTelegram } from './TelegramContext.js';
 import { database } from '../services/FirebaseConfig.js';
-import { ref, get, update, set, onValue } from 'firebase/database';
+import { ref, get, update, set, onValue, query, orderByChild, equalTo } from 'firebase/database';
 
 const ReferralContext = createContext();
 export const useReferral = () => useContext(ReferralContext);
@@ -156,69 +156,31 @@ export const ReferralProvider = ({ children }) => {
 
   useEffect(() => {
     if (!user?.id) return;
-    const referralsRef = ref(database, `users/${user.id}/referrals`);
-    const unsub = onValue(referralsRef, async snapshot => {
+
+    // 🚀 REVERSE LOOKUP: Query 'users' node for anyone who has referredBy.id === user.id
+    // This is the source of truth and bypasses any broken/legacy local referral lists.
+    const usersRef = ref(database, 'users');
+    const referralQuery = query(usersRef, orderByChild('referredBy/id'), equalTo(String(user.id)));
+
+    const unsub = onValue(referralQuery, (snapshot) => {
       const data = snapshot.val() || {};
-      const entries = Object.entries(data); // Use entries to get the key (friendId) or value
 
-      const list = await Promise.all(
-        entries.map(async ([key, value]) => {
-          // Robust ID extraction: Prefer explicit ID in value, fallback to string value, then key
-          let friendId = null;
-          if (typeof value === 'object' && value?.id) {
-            friendId = value.id;
-          } else if (typeof value === 'string') {
-            friendId = value;
-          } else {
-            friendId = key;
-          }
-
-          const referralDate = typeof value === 'object' ? value.timestamp : null;
-          // Fallback name from the referral record itself if available
-          const fallbackName = typeof value === 'object' ? value.name : 'Unknown';
-
-          if (!friendId) return null;
-
-          try {
-            // 🚀 Fetch LIVE User Data to get the perfect name
-            const snap = await get(ref(database, `users/${friendId}`));
-            const u = snap.val();
-
-            // Intelligent Name Fallback
-            let displayName = u?.name;
-            if (!displayName || displayName === "Unknown" || displayName === "Anonymous") {
-              displayName = fallbackName;
-            }
-            if (!displayName || displayName === "Unknown" || displayName === "Anonymous") {
-              displayName = `User ${friendId}`;
-            }
-
-            return {
-              id: friendId,
-              name: displayName,
-              points: u?.Score?.network_score || 0,
-              status: u?.status || 'active',
-              referralDate: referralDate
-            };
-          } catch (err) {
-            console.warn(`Error fetching user ${friendId}`, err);
-            // Error case fallback
-            let displayName = fallbackName;
-            if (!displayName || displayName === "Unknown" || displayName === "Anonymous") {
-              displayName = `User ${friendId}`;
-            }
-            return {
-              id: friendId,
-              name: displayName,
-              points: 0,
-              status: 'unknown',
-              referralDate: referralDate
-            };
-          }
-        })
-      );
-      setInvitedFriends(list.filter(i => i !== null));
+      const list = Object.values(data).map(u => {
+        // We have the full user object 'u' directly!
+        return {
+          id: u.id || 'Unknown',
+          name: u.name || 'Unknown',
+          points: u.Score?.network_score || 0,
+          status: u.status || 'active',
+          referralDate: u.joinedAt || Date.now() // Use joinedAt if available
+        };
+      });
+      console.log(`[ReferralContext] Found ${list.length} referrals via Reverse Lookup`);
+      setInvitedFriends(list);
+    }, (error) => {
+      console.error("[ReferralContext] Error querying referrals:", error);
     });
+
     return () => unsub();
   }, [user?.id]);
 
