@@ -170,19 +170,34 @@ export const ReferralProvider = ({ children }) => {
           // Backward compatibility: item might be a string (old ID) or object { id, timestamp }
           const friendId = typeof item === 'object' ? item.id : item;
           const referralDate = typeof item === 'object' ? item.timestamp : null;
+          // Fallback name from the referral record itself if available
+          const fallbackName = typeof item === 'object' ? item.name : 'Unknown';
 
-          const snap = await get(ref(database, `users/${friendId}`));
-          const u = snap.val();
-          return {
-            id: friendId,
-            name: u.name || 'Unknown',
-            points: u.Score?.network_score || 0,
-            status: u.status || 'active',
-            referralDate: referralDate // Include date for filtering
-          };
+          if (!friendId) return null; // Skip invalid entries
+
+          try {
+            const snap = await get(ref(database, `users/${friendId}`));
+            const u = snap.val();
+            return {
+              id: friendId,
+              name: u?.name || fallbackName,
+              points: u?.Score?.network_score || 0,
+              status: u?.status || 'active',
+              referralDate: referralDate // Include date for filtering
+            };
+          } catch (err) {
+            console.warn(`Error fetching user ${friendId}`, err);
+            return {
+              id: friendId,
+              name: fallbackName,
+              points: 0,
+              status: 'unknown',
+              referralDate: referralDate
+            };
+          }
         })
       );
-      setInvitedFriends(list);
+      setInvitedFriends(list.filter(i => i !== null)); // Filter out nulls
     });
     return () => unsub();
   }, [user?.id]);

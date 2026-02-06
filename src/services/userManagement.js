@@ -175,6 +175,9 @@
 //     return null;
 //   }
 // };
+
+
+
 import { database } from "../services/FirebaseConfig";
 import { ref, get, update, set } from "firebase/database";
 
@@ -240,7 +243,7 @@ export const initializeUser = async (user, startParam) => {
           lastStreakCheckDateUTC: todayUTC,
           longestStreakCount: 1,
         },
-        referralSource: "Direct",
+        referralSource: referralSource,
       });
 
       console.log("✅ New user created:", userId);
@@ -266,6 +269,7 @@ export const initializeUser = async (user, startParam) => {
 
           if (!alreadyExists.exists()) {
             await set(referralRef, {
+              id: userId,
               name: userName,
               joinedAt: Date.now(),
             });
@@ -273,7 +277,7 @@ export const initializeUser = async (user, startParam) => {
 
           // 🔥 Update new user with referral info
           await update(userRef, {
-            referralSource: "Invite",
+            referralSource: referralSource,
             referredBy: referredByData,
           });
 
