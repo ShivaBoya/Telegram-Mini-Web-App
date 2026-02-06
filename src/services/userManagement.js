@@ -175,7 +175,6 @@
 //     return null;
 //   }
 // };
-
 import { database } from "../services/FirebaseConfig";
 import { ref, get, update, set } from "firebase/database";
 
@@ -188,61 +187,39 @@ export const initializeUser = async (user, startParam) => {
   const userId = user?.id?.toString();
   const userName = user?.first_name || "Anonymous";
   const todayUTC = new Date().toISOString().split("T")[0];
+
   const userRef = ref(database, `users/${userId}`);
 
   try {
     const snapshot = await get(userRef);
 
-    // ===============================
+    // =====================================================
     // 🚀 NEW USER CREATION
-    // ===============================
+    // =====================================================
     if (!snapshot.exists()) {
-      let referralSource = "Direct";
-      let referredByData = null;
 
       const effectiveStartParam =
         startParam || window.Telegram?.WebApp?.initDataUnsafe?.start_param;
 
       let referrerId = null;
+      let referralSource = "Direct";
+      let referredByData = null;
 
+      // 🔎 Extract referrer ID
       if (effectiveStartParam) {
-        const parts = effectiveStartParam.split("_");
-
-        if (parts.length >= 3 && parts[0] === "ref") {
-          referrerId = parts[2];
-        } else if (/^\d+$/.test(effectiveStartParam)) {
+        if (/^\d+$/.test(effectiveStartParam)) {
           referrerId = effectiveStartParam;
-        }
-      }
-
-      // ✅ VALID REFERRAL
-      if (referrerId && referrerId !== userId) {
-        const referrerRef = ref(database, `users/${referrerId}`);
-        const referrerSnap = await get(referrerRef);
-
-        if (referrerSnap.exists()) {
-          const referrerName = referrerSnap.val().name || "Unknown";
-          referralSource = "Invite";
-          referredByData = { id: referrerId, name: referrerName };
-
-          // 🔥 ADD THIS USER INTO REFERRER ACCOUNT
-          const referralEntryRef = ref(
-            database,
-            `users/${referrerId}/referrals/${userId}`
-          );
-
-          const alreadyReferred = await get(referralEntryRef);
-
-          if (!alreadyReferred.exists()) {
-            await set(referralEntryRef, {
-              name: userName,
-              joinedAt: Date.now(),
-            });
+        } else if (effectiveStartParam.startsWith("ref_")) {
+          const parts = effectiveStartParam.split("_");
+          if (parts.length >= 2) {
+            referrerId = parts[1];
           }
         }
       }
 
-      // ✅ CREATE NEW USER
+      // =====================================================
+      // 🆕 STEP 1: CREATE USER FIRST
+      // =====================================================
       await set(userRef, {
         name: userName,
         lastUpdated: Date.now(),
@@ -263,16 +240,53 @@ export const initializeUser = async (user, startParam) => {
           lastStreakCheckDateUTC: todayUTC,
           longestStreakCount: 1,
         },
-        referralSource,
-        ...(referredByData && { referredBy: referredByData }),
+        referralSource: "Direct",
       });
 
-      console.log(`✅ New user created: ${userId} via ${referralSource}`);
+      console.log("✅ New user created:", userId);
+
+      // =====================================================
+      // 🤝 STEP 2: HANDLE REFERRAL AFTER USER CREATION
+      // =====================================================
+      if (referrerId && referrerId !== userId) {
+        const referrerRef = ref(database, `users/${referrerId}`);
+        const referrerSnap = await get(referrerRef);
+
+        if (referrerSnap.exists()) {
+          const referrerName = referrerSnap.val().name || "Unknown";
+
+          referralSource = "Invite";
+          referredByData = { id: referrerId, name: referrerName };
+
+          // 🔥 Add this user inside referrer's referrals
+          const referralPath = `users/${referrerId}/referrals/${userId}`;
+          const referralRef = ref(database, referralPath);
+
+          const alreadyExists = await get(referralRef);
+
+          if (!alreadyExists.exists()) {
+            await set(referralRef, {
+              name: userName,
+              joinedAt: Date.now(),
+            });
+          }
+
+          // 🔥 Update new user with referral info
+          await update(userRef, {
+            referralSource: "Invite",
+            referredBy: referredByData,
+          });
+
+          console.log(
+            `🎉 Referral success: ${userName} referred by ${referrerName}`
+          );
+        }
+      }
     }
 
-    // ===============================
+    // =====================================================
     // 🔄 EXISTING USER PATCH
-    // ===============================
+    // =====================================================
     else {
       const userData = snapshot.val();
       const updates = {};
