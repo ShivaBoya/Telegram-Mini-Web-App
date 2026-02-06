@@ -50,11 +50,6 @@ export const ReferralProvider = ({ children }) => {
     const exists = Object.values(list).includes(referredId);
     if (exists) return;
     const idx = Object.keys(list).length + 1;
-    // Store as object with timestamp and name for complete tracking
-    // We can get the referred user's name from context, but cleaner to fetch or pass it.
-    // Since we are in Context provider, we might not have 'user' object fully updated if just mounted.
-    // But 'user' from useTelegram() should be available.
-
     let referredName = "Unknown";
     try {
       const referredSnap = await get(ref(database, `users/${referredId}`));
@@ -164,7 +159,7 @@ export const ReferralProvider = ({ children }) => {
     const referralsRef = ref(database, `users/${user.id}/referrals`);
     const unsub = onValue(referralsRef, async snapshot => {
       const data = snapshot.val() || {};
-      const entries = Object.entries(data); // Use entries to get the key (friendId)
+      const entries = Object.entries(data); // Use entries to get the key (friendId) or value
 
       const list = await Promise.all(
         entries.map(async ([key, value]) => {
@@ -179,11 +174,13 @@ export const ReferralProvider = ({ children }) => {
           }
 
           const referralDate = typeof value === 'object' ? value.timestamp : null;
+          // Fallback name from the referral record itself if available
           const fallbackName = typeof value === 'object' ? value.name : 'Unknown';
 
           if (!friendId) return null;
 
           try {
+            // 🚀 Fetch LIVE User Data to get the perfect name
             const snap = await get(ref(database, `users/${friendId}`));
             const u = snap.val();
 
