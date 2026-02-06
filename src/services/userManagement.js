@@ -45,7 +45,7 @@
 import { database } from "../services/FirebaseConfig";
 import { ref, get, update, set } from "firebase/database";
 
-export const initializeUser = async (user) => {
+export const initializeUser = async (user, startParam) => {
   if (!user) {
     console.error("User data not available");
     return null;
@@ -58,6 +58,31 @@ export const initializeUser = async (user) => {
   try {
     const snapshot = await get(userRef);
     if (!snapshot.exists()) {
+      // Determine Referral Source and Data
+      let referralSource = "Direct";
+      let referredByData = null;
+
+      if (startParam) {
+        // Expected format: ref_CODE_USERID
+        const parts = startParam.split('_');
+        if (parts.length >= 3) {
+          const referrerId = parts[2];
+          if (referrerId && referrerId !== userId) {
+            referralSource = "Invite";
+
+            // Fetch Referrer's Name
+            try {
+              const referrerSnap = await get(ref(database, `users/${referrerId}`));
+              const referrerName = referrerSnap.exists() ? (referrerSnap.val().name || "Unknown") : "Unknown";
+              referredByData = { id: referrerId, name: referrerName };
+            } catch (err) {
+              console.error("Error fetching referrer name:", err);
+              referredByData = { id: referrerId, name: "Unknown" };
+            }
+          }
+        }
+      }
+
       // New user: set all fields
       await set(userRef, {
         name: user.first_name || "Anonymous",
@@ -79,9 +104,10 @@ export const initializeUser = async (user) => {
           lastStreakCheckDateUTC: new Date().toISOString().split('T')[0],
           longestStreakCount: 1
         },
-        referralSource: "Direct", // Default to Direct, overwritten by ReferralContext if applicable
+        referralSource: referralSource,
+        ...(referredByData && { referredBy: referredByData })
       });
-      console.log("New user created:", userId);
+      console.log(`New user created: ${userId} via ${referralSource}`);
     } else {
       // Existing user: patch missing fields only (non-destructive)
       const userData = snapshot.val();

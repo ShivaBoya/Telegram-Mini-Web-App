@@ -50,8 +50,18 @@ export const ReferralProvider = ({ children }) => {
     const exists = Object.values(list).includes(referredId);
     if (exists) return;
     const idx = Object.keys(list).length + 1;
-    // Store as object with timestamp for daily tracking
-    await update(refRef, { [idx]: { id: referredId, timestamp: Date.now() } });
+    // Store as object with timestamp and name for complete tracking
+    // We can get the referred user's name from context, but cleaner to fetch or pass it.
+    // Since we are in Context provider, we might not have 'user' object fully updated if just mounted.
+    // But 'user' from useTelegram() should be available.
+
+    let referredName = "Unknown";
+    try {
+      const referredSnap = await get(ref(database, `users/${referredId}`));
+      if (referredSnap.exists()) referredName = referredSnap.val().name || "Unknown";
+    } catch (e) { console.error("Error fetching referred name", e); }
+
+    await update(refRef, { [idx]: { id: referredId, name: referredName, timestamp: Date.now() } });
 
     // Store "Referred By" details in the new user's record
     const referredUserRef = ref(database, `users/${referredId}`);

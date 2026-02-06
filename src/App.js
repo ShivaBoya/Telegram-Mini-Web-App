@@ -198,7 +198,14 @@ function App() {
 
     const fetchData = async () => {
       if (user) {
-        await initializeUser(user);
+        // Robust extraction of start_param
+        let startParam = tg.initDataUnsafe?.start_param;
+        if (!startParam) {
+          const urlParams = new URL(window.location.href).searchParams;
+          startParam = urlParams.get('tgWebAppStartParam');
+        }
+
+        await initializeUser(user, startParam);
       } else {
         console.info("Dev mode: User data not available");
       }
