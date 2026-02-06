@@ -186,18 +186,33 @@ export const ReferralProvider = ({ children }) => {
           try {
             const snap = await get(ref(database, `users/${friendId}`));
             const u = snap.val();
+
+            // Intelligent Name Fallback
+            let displayName = u?.name;
+            if (!displayName || displayName === "Unknown" || displayName === "Anonymous") {
+              displayName = fallbackName;
+            }
+            if (!displayName || displayName === "Unknown" || displayName === "Anonymous") {
+              displayName = `User ${friendId}`;
+            }
+
             return {
               id: friendId,
-              name: u?.name || fallbackName,
+              name: displayName,
               points: u?.Score?.network_score || 0,
               status: u?.status || 'active',
               referralDate: referralDate
             };
           } catch (err) {
             console.warn(`Error fetching user ${friendId}`, err);
+            // Error case fallback
+            let displayName = fallbackName;
+            if (!displayName || displayName === "Unknown" || displayName === "Anonymous") {
+              displayName = `User ${friendId}`;
+            }
             return {
               id: friendId,
-              name: fallbackName,
+              name: displayName,
               points: 0,
               status: 'unknown',
               referralDate: referralDate
