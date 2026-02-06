@@ -214,7 +214,11 @@ export const initializeUser = async (user, startParam) => {
           referrerId = effectiveStartParam;
         } else if (effectiveStartParam.startsWith("ref_")) {
           const parts = effectiveStartParam.split("_");
-          if (parts.length >= 2) {
+          // Format: ref_CODE_USERID (3 parts)
+          if (parts.length >= 3) {
+            referrerId = parts[2];
+          } else if (parts.length === 2) {
+            // Fallback for ref_USERID (2 parts)
             referrerId = parts[1];
           }
         }

@@ -102,9 +102,15 @@ export const ReferralProvider = ({ children }) => {
       return;
     }
 
-    /* Expected format: ref_CODE_USERID */
+    /* Expected format: ref_CODE_USERID or ref_USERID */
     const parts = startParam.split('_');
-    const referrerId = parts[2];
+    let referrerId = parts[2]; // Default for 3-part: ref_CODE_USERID
+
+    if (!referrerId && parts.length === 2 && /^\d+$/.test(parts[1])) {
+      // Fallback for 2-part: ref_USERID
+      referrerId = parts[1];
+    }
+
     console.log('[Referral] Extracted referrerId:', referrerId);
 
     if (!referrerId || referrerId === String(referredId)) {
