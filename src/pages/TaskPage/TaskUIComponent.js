@@ -72,9 +72,17 @@ export default function TasksPage() {
   };
 
   const isTaskDone = (task) => {
-    const { id, type } = task;
-    // Check both root location and tasks/daily subdirectory
-    const status = userTasks[id] || (userTasks.tasks?.daily?.[id]);
+    const { id, type, category } = task;
+
+    // CRITICAL FIX: For daily tasks, ONLY check the daily folder. 
+    // Ignore root `userTasks[id]` because old legacy data might exist there that never gets wiped.
+    let status;
+    if (category === 'daily') {
+      status = userTasks.tasks?.daily?.[id];
+    } else {
+      // For standard tasks, check root. Fallback to daily just in case.
+      status = userTasks[id] || (userTasks.tasks?.daily?.[id]);
+    }
 
     if (status === undefined || status === null || status === false) return false;
 
