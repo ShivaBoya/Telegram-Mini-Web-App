@@ -164,16 +164,24 @@ export const ReferralProvider = ({ children }) => {
     const referralsRef = ref(database, `users/${user.id}/referrals`);
     const unsub = onValue(referralsRef, async snapshot => {
       const data = snapshot.val() || {};
-      const values = Object.values(data);
-      const list = await Promise.all(
-        values.map(async item => {
-          // Backward compatibility: item might be a string (old ID) or object { id, timestamp }
-          const friendId = typeof item === 'object' ? item.id : item;
-          const referralDate = typeof item === 'object' ? item.timestamp : null;
-          // Fallback name from the referral record itself if available
-          const fallbackName = typeof item === 'object' ? item.name : 'Unknown';
+      const entries = Object.entries(data); // Use entries to get the key (friendId)
 
-          if (!friendId) return null; // Skip invalid entries
+      const list = await Promise.all(
+        entries.map(async ([key, value]) => {
+          // Robust ID extraction: Prefer explicit ID in value, fallback to string value, then key
+          let friendId = null;
+          if (typeof value === 'object' && value?.id) {
+            friendId = value.id;
+          } else if (typeof value === 'string') {
+            friendId = value;
+          } else {
+            friendId = key;
+          }
+
+          const referralDate = typeof value === 'object' ? value.timestamp : null;
+          const fallbackName = typeof value === 'object' ? value.name : 'Unknown';
+
+          if (!friendId) return null;
 
           try {
             const snap = await get(ref(database, `users/${friendId}`));
@@ -183,7 +191,7 @@ export const ReferralProvider = ({ children }) => {
               name: u?.name || fallbackName,
               points: u?.Score?.network_score || 0,
               status: u?.status || 'active',
-              referralDate: referralDate // Include date for filtering
+              referralDate: referralDate
             };
           } catch (err) {
             console.warn(`Error fetching user ${friendId}`, err);
@@ -197,7 +205,7 @@ export const ReferralProvider = ({ children }) => {
           }
         })
       );
-      setInvitedFriends(list.filter(i => i !== null)); // Filter out nulls
+      setInvitedFriends(list.filter(i => i !== null));
     });
     return () => unsub();
   }, [user?.id]);
