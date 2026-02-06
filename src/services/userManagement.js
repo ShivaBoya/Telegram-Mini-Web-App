@@ -62,25 +62,49 @@ export const initializeUser = async (user, startParam) => {
       let referralSource = "Direct";
       let referredByData = null;
 
-      if (startParam) {
-        // Expected format: ref_CODE_USERID
-        const parts = startParam.split('_');
-        if (parts.length >= 3) {
-          const referrerId = parts[2];
-          if (referrerId && referrerId !== userId) {
-            referralSource = "Invite";
+      // Robust startParam check: generic argument OR direct from SDK as fallback
+      const effectiveStartParam = startParam || window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+      console.log(`[InitializeUser] Processing startParam: "${effectiveStartParam}" for user: ${userId}`);
 
-            // Fetch Referrer's Name
-            try {
-              const referrerSnap = await get(ref(database, `users/${referrerId}`));
-              const referrerName = referrerSnap.exists() ? (referrerSnap.val().name || "Unknown") : "Unknown";
+      if (effectiveStartParam) {
+        // Try parsing different formats
+        let referrerId = null;
+        const parts = effectiveStartParam.split('_');
+
+        if (parts.length >= 3 && parts[0] === 'ref') {
+          // Format: ref_CODE_USERID
+          referrerId = parts[2];
+        } else if (parts.length === 1 && /^\d+$/.test(parts[0])) {
+          // Format: USERID (Legacy or direct ID)
+          referrerId = parts[0];
+        }
+
+        console.log(`[InitializeUser] Extracted Referrer ID: ${referrerId}`);
+
+        if (referrerId && referrerId !== userId) {
+          referralSource = "Invite";
+
+          // Fetch Referrer's Name
+          try {
+            const referrerSnap = await get(ref(database, `users/${referrerId}`));
+            // Ensure we don't crash if referrer doesn't exist
+            if (referrerSnap.exists()) {
+              const referrerName = referrerSnap.val().name || "Unknown";
               referredByData = { id: referrerId, name: referrerName };
-            } catch (err) {
-              console.error("Error fetching referrer name:", err);
+              console.log(`[InitializeUser] Referrer found: ${referrerName} (${referrerId})`);
+            } else {
+              console.log(`[InitializeUser] Referrer ID ${referrerId} not found in DB.`);
               referredByData = { id: referrerId, name: "Unknown" };
             }
+          } catch (err) {
+            console.error("Error fetching referrer name:", err);
+            referredByData = { id: referrerId, name: "Unknown" };
           }
+        } else {
+          console.log(`[InitializeUser] Invalid Referrer ID (Self-referral or missing)`);
         }
+      } else {
+        console.log(`[InitializeUser] No startParam found.`);
       }
 
       // New user: set all fields

@@ -219,12 +219,12 @@ export default function TasksPage() {
       // 7-day streak task
       completedVal = weeklyDaysCompleted;
     } else if (task.title && (task.title.toLowerCase().includes('invite') || task.title.toLowerCase().includes('refer'))) {
-      // Referral Task
-      // IF it is a DAILY referral task, filter by date
+      // FORCE 'daily' category for generic "Refer a Friend" tasks to ensure strict daily reset logic applies
+      task.category = 'daily';
+
       if (task.category === 'daily') {
         completedVal = invitedFriends ? invitedFriends.filter(f => isToday(f.referralDate)).length : 0;
       } else {
-        // Standard cumulative referral task
         completedVal = invitedFriends ? invitedFriends.length : 0;
       }
     } else if (task.title && task.title.toLowerCase().includes('points')) {
@@ -235,6 +235,7 @@ export default function TasksPage() {
 
     return {
       ...task,
+      category: (task.title && (task.title.toLowerCase().includes('invite') || task.title.toLowerCase().includes('refer'))) ? 'daily' : (task.category || 'standard'),
       type: (task.title && task.title.toLowerCase().includes('news')) ? 'news' :
         (task.title && (task.title.toLowerCase().includes('invite') || task.title.toLowerCase().includes('refer'))) ? 'referral' :
           task.type,
@@ -711,7 +712,8 @@ export default function TasksPage() {
                                 ? (task.type === 'partnership' || task.type === 'social' ? "Open" : "Done")
                                 : (
                                   (userTasks[task.id] === false && (task.type !== 'news' || newsCount >= 5)) ||
-                                    (task.type === 'weekly' && task.completed >= task.total)
+                                    (task.type === 'weekly' && task.completed >= task.total) ||
+                                    ((task.type === 'referral' || task.category === 'daily') && task.completed >= task.total)
                                     ? "Claim"
                                     : buttonText[task.id] || "Start Task"
                                 )
@@ -805,7 +807,6 @@ export default function TasksPage() {
                                 <p className="text-xs text-white/70 mt-1">
                                   {task.description}
                                 </p>
-
                               </div>
                             </div>
                             <div className="flex flex-col gap-1 items-end">
@@ -822,7 +823,7 @@ export default function TasksPage() {
                                     (userTasks[taskId] === false) ||
                                       (task.type === 'weekly' && task.completed >= task.total) ||
                                       (task.type === 'game' && gameCompleted) ||
-                                      (task.type === 'referral' && task.completed >= task.total) ||
+                                      ((task.type === 'referral' || task.category === 'daily') && task.completed >= task.total) ||
                                       (task.type === 'news' && newsCount >= 5)
                                       ? "Claim"
                                       : buttonText[taskId] || "Start Task"

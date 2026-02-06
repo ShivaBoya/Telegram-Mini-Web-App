@@ -231,9 +231,8 @@ function App() {
 
       // Daily Reset
       if (data.lastReset?.daily !== today) {
-        // Remove daily tasks
-
-        await update(ref(database, `connections/${userId}/tasks`), { daily: {} });
+        // Remove daily tasks (use null to delete)
+        await update(ref(database, `connections/${userId}/tasks`), { daily: null });
 
         // Update lastReset/daily under connections
         updates[`users/${userId}/lastReset/daily`] = today;
