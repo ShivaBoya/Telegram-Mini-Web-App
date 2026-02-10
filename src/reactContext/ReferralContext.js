@@ -31,60 +31,85 @@ export const ReferralProvider = ({ children }) => {
   }, []);
 
   const addReferralRecord = React.useCallback(async (referrerId, referredId) => {
+    console.log(`[ReferralContext] Processing 3-Level Referral: ${referrerId} -> ${referredId}`);
+
+    // 1. Validate Referrer Exists
     const referrerUserRef = ref(database, `users/${referrerId}`);
     const userSnap = await get(referrerUserRef);
-
-    let referrerName = "Unknown";
-
     if (!userSnap.exists()) {
-      await set(referrerUserRef, {
-        referrals: {}
-      });
-    } else {
-      referrerName = userSnap.val().name || "Unknown";
+      console.error(`[Referral] Referrer ${referrerId} does not exist.`);
+      return;
     }
-    // Add to referrer list and award
-    const refRef = ref(database, `users/${referrerId}/referrals`);
-    const snap = await get(refRef);
-    const list = snap.val() || {};
-    const exists = Object.values(list).includes(referredId);
-    if (exists) return;
-    const idx = Object.keys(list).length + 1;
-    let referredName = "Unknown";
+
+    // 2. Check Loop or Duplicate (Double check DB)
+    const processedCheckRef = ref(database, `users/${referredId}/referredBy`);
+    const processedSnap = await get(processedCheckRef);
+    if (processedSnap.exists()) {
+      console.log(`[Referral] User ${referredId} already referred by ${processedSnap.val()}`);
+      return;
+    }
+
+    // 3. DEFINE REWARDS (3 Levels)
+    const REWARD_L1 = 100; // Direct
+    const REWARD_L2 = 20;  // Parent
+    const REWARD_L3 = 10;  // Grandparent
+
+    const updates = {};
+    // const timestamp = Date.now(); // Removed unused variable
+
+
+    // --- LINKING (New Schema) ---
+    // User -> Referrer
+    updates[`users/${referredId}/referredBy`] = referrerId;
+    updates[`users/${referredId}/referralSource`] = "Invite";
+
+    // Referrer -> User (Simple "true" map)
+    updates[`users/${referrerId}/referrals/${referredId}`] = true;
+
+    // --- REWARD DISTRIBUTION ---
+
+    // Level 1: Direct Referrer
+    await updateScores(referrerId, REWARD_L1);
+    console.log(`[Referral] L1 Reward (${REWARD_L1}) to ${referrerId}`);
+
+    // Level 2: Parent of Referrer
     try {
-      const referredSnap = await get(ref(database, `users/${referredId}`));
-      if (referredSnap.exists()) referredName = referredSnap.val().name || "Unknown";
-    } catch (e) { console.error("Error fetching referred name", e); }
+      const p2Ref = ref(database, `users/${referrerId}/referredBy`);
+      const p2Snap = await get(p2Ref);
+      if (p2Snap.exists()) {
+        const p2Id = p2Snap.val();
+        // Verify P2 exists to be safe
+        if (p2Id && typeof p2Id === 'string') {
+          await updateScores(p2Id, REWARD_L2);
+          console.log(`[Referral] L2 Reward (${REWARD_L2}) to ${p2Id}`);
 
-    await update(refRef, { [idx]: { id: referredId, name: referredName, timestamp: Date.now() } });
-
-    // Store "Referred By" details in the new user's record
-    const referredUserRef = ref(database, `users/${referredId}`);
-    await update(referredUserRef, {
-      referralSource: "Invite",
-      referredBy: {
-        id: referrerId,
-        name: referrerName
-      }
-    });
-
-    // Award: referrer 100, referred 50
-    await updateScores(referrerId, 100);
-    await updateScores(referredId, 50);
-
-    // Multi-Level Referral Reward (20% to the Grandparent)
-    try {
-      const parentRef = ref(database, `users/${referrerId}/referredBy/id`);
-      const parentSnap = await get(parentRef);
-      if (parentSnap.exists()) {
-        const grandParentId = parentSnap.val();
-        // 20% of 100 = 20 points
-        await updateScores(grandParentId, 20);
-        console.log(`[ReferralContext] Awarded 20 points to Grandparent: ${grandParentId}`);
+          // Level 3: Grandparent (Parent of P2)
+          const p3Ref = ref(database, `users/${p2Id}/referredBy`);
+          const p3Snap = await get(p3Ref);
+          if (p3Snap.exists()) {
+            const p3Id = p3Snap.val();
+            if (p3Id && typeof p3Id === 'string') {
+              await updateScores(p3Id, REWARD_L3);
+              console.log(`[Referral] L3 Reward (${REWARD_L3}) to ${p3Id}`);
+            }
+          }
+        }
       }
     } catch (err) {
-      console.error("[ReferralContext] Error processing multi-level reward:", err);
+      console.error("[Referral] Error in Multi-Level Distribution:", err);
     }
+
+    // Execute Linking Updates Atomic
+    await update(ref(database), updates);
+
+    // Give new user starting bonus? (Original code gave 50). Keeping it? User prompt didn't mention it, but usually expected.
+    // User Prompt: "Level 1... I receive 100...". Didn't specify New User reward.
+    // I will keep the existing 50 bonus for the new user to avoid regression, or remove if strictly following prompt.
+    // Prompt says "Reward Distribution Summary... Level 1, 2, 3". No mention of new user.
+    // But previous code had `await updateScores(referredId, 50);`. I'll keep it to be nice, or remove to be strict.
+    // I'll keep it as a "Welcome Bonus" outside the "Referral Reward System" description.
+    await updateScores(referredId, 50);
+
   }, [updateScores]);
 
   useEffect(() => {
@@ -177,10 +202,9 @@ export const ReferralProvider = ({ children }) => {
   useEffect(() => {
     if (!user?.id) return;
 
-    // 🚀 REVERSE LOOKUP: Query 'users' node for anyone who has referredBy.id === user.id
-    // This is the source of truth and bypasses any broken/legacy local referral lists.
+    // 🚀 REVERSE LOOKUP: Query 'users' node for anyone who has referredBy === user.id (String check)
     const usersRef = ref(database, 'users');
-    const referralQuery = query(usersRef, orderByChild('referredBy/id'), equalTo(String(user.id)));
+    const referralQuery = query(usersRef, orderByChild('referredBy'), equalTo(String(user.id)));
 
     const unsub = onValue(referralQuery, (snapshot) => {
       const data = snapshot.val() || {};

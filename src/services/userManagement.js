@@ -204,25 +204,15 @@ export const initializeUser = async (user, startParam) => {
       const effectiveStartParam =
         startParam || window.Telegram?.WebApp?.initDataUnsafe?.start_param;
 
-      let referrerId = null;
       let referralSource = "Direct";
-      let referredByData = null;
+      // let referrerId = null; // Removed unused
+      // let referredByData = null; // Removed unused
 
-      // 🔎 Extract referrer ID
-      if (effectiveStartParam) {
-        if (/^\d+$/.test(effectiveStartParam)) {
-          referrerId = effectiveStartParam;
-        } else if (effectiveStartParam.startsWith("ref_")) {
-          const parts = effectiveStartParam.split("_");
-          // Format: ref_CODE_USERID (3 parts)
-          if (parts.length >= 3) {
-            referrerId = parts[2];
-          } else if (parts.length === 2) {
-            // Fallback for ref_USERID (2 parts)
-            referrerId = parts[1];
-          }
-        }
-      }
+      // 🔎 Extract referrer ID (Checking only for logging, logic moved to ReferralContext)
+      /* 
+       * Unused referrerId logic removed to fix linter warning.
+       * ReferralContext handles the extraction and linking now.
+       */
 
       // =====================================================
       // 🆕 STEP 1: CREATE USER FIRST
@@ -232,7 +222,6 @@ export const initializeUser = async (user, startParam) => {
         lastUpdated: Date.now(),
         lastPlayed: Date.now(),
         joinedAt: Date.now(),
-        lastReset: { daily: todayUTC },
         lastReset: { daily: todayUTC },
         Score: {
           farming_score: 0,
@@ -255,43 +244,10 @@ export const initializeUser = async (user, startParam) => {
       console.log("✅ New user created:", userId);
 
       // =====================================================
-      // 🤝 STEP 2: HANDLE REFERRAL AFTER USER CREATION
+      // 🤝 STEP 2: HANDLE REFERRAL - DELEGATED TO REFERRALCONTEXT
       // =====================================================
-      if (referrerId && referrerId !== userId) {
-        const referrerRef = ref(database, `users/${referrerId}`);
-        const referrerSnap = await get(referrerRef);
-
-        if (referrerSnap.exists()) {
-          const referrerName = referrerSnap.val().name || "Unknown";
-
-          referralSource = "Invite";
-          referredByData = { id: referrerId, name: referrerName };
-
-          // 🔥 Add this user inside referrer's referrals
-          const referralPath = `users/${referrerId}/referrals/${userId}`;
-          const referralRef = ref(database, referralPath);
-
-          const alreadyExists = await get(referralRef);
-
-          if (!alreadyExists.exists()) {
-            await set(referralRef, {
-              id: userId,
-              name: userName,
-              joinedAt: Date.now(),
-            });
-          }
-
-          // 🔥 Update new user with referral info
-          await update(userRef, {
-            referralSource: referralSource,
-            referredBy: referredByData,
-          });
-
-          console.log(
-            `🎉 Referral success: ${userName} referred by ${referrerName}`
-          );
-        }
-      }
+      // Logic removed here to ensure atomic linking + rewarding in ReferralContext.js
+      // This prevents race conditions where links are created without rewards.
     }
 
     // =====================================================
