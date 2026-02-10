@@ -231,6 +231,8 @@ export const initializeUser = async (user, startParam) => {
         name: userName,
         lastUpdated: Date.now(),
         lastPlayed: Date.now(),
+        joinedAt: Date.now(),
+        lastReset: { daily: todayUTC },
         lastReset: { daily: todayUTC },
         Score: {
           farming_score: 0,

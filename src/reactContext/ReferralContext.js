@@ -192,7 +192,7 @@ export const ReferralProvider = ({ children }) => {
           name: u.name || 'Unknown',
           points: u.Score?.network_score || 0,
           status: u.status || 'active',
-          referralDate: u.joinedAt || Date.now() // Use joinedAt if available
+          referralDate: u.joinedAt || 0 // Default to 0 (old) if missing, NOT Date.now()
         };
       });
       console.log(`[ReferralContext] Found ${list.length} referrals via Reverse Lookup`);
