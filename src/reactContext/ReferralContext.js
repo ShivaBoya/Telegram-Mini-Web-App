@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useTelegram } from './TelegramContext.js';
 import { database } from '../services/FirebaseConfig.js';
-import { ref, get, update, set, onValue, query, orderByChild, equalTo } from 'firebase/database';
+import { ref, get, update, set, onValue } from 'firebase/database';
 
 const ReferralContext = createContext();
 export const useReferral = () => useContext(ReferralContext);
@@ -55,7 +55,7 @@ export const ReferralProvider = ({ children }) => {
     const REWARD_L3 = 10;  // Grandparent
 
     const updates = {};
-    // const timestamp = Date.now(); // Removed unused variable
+    const timestamp = Date.now(); // Re-added used variable
 
 
     // --- LINKING (New Schema) ---
@@ -63,8 +63,24 @@ export const ReferralProvider = ({ children }) => {
     updates[`users/${referredId}/referredBy`] = referrerId;
     updates[`users/${referredId}/referralSource`] = "Invite";
 
-    // Referrer -> User (Simple "true" map)
-    updates[`users/${referrerId}/referrals/${referredId}`] = true;
+    // Referrer -> User (Store details for UI display)
+    // We need the referred user's name. 
+    // We can fetch it, or if it's a new user, we might not have it yet if this runs concurrently?
+    // Actually, this runs AFTER user creation.
+    let referredName = "Unknown";
+    try {
+      const referredSnap = await get(ref(database, `users/${referredId}`));
+      if (referredSnap.exists()) {
+        referredName = referredSnap.val().name || "Unknown";
+      }
+    } catch (e) { console.error("Error fetching referred name", e); }
+
+
+    updates[`users/${referrerId}/referrals/${referredId}`] = {
+      id: referredId,
+      name: referredName,
+      joinedAt: timestamp
+    };
 
     // --- REWARD DISTRIBUTION ---
 
@@ -202,27 +218,50 @@ export const ReferralProvider = ({ children }) => {
   useEffect(() => {
     if (!user?.id) return;
 
-    // 🚀 REVERSE LOOKUP: Query 'users' node for anyone who has referredBy === user.id (String check)
-    const usersRef = ref(database, 'users');
-    const referralQuery = query(usersRef, orderByChild('referredBy'), equalTo(String(user.id)));
+    // 🚀 UPDATED LOOKUP: Query the user's OWN 'referrals' node
+    // This expects the 'referrals' node to contain objects: { [id]: { name: "...", joinedAt: ... } } (New Schema)
+    // OR it might contain legacy data: { [id]: true } or array { 1: { id: ..., name: ... } }
+    // We must handle both.
 
-    const unsub = onValue(referralQuery, (snapshot) => {
-      const data = snapshot.val() || {};
+    const referralsRef = ref(database, `users/${user.id}/referrals`);
 
-      const list = Object.values(data).map(u => {
-        // We have the full user object 'u' directly!
-        return {
-          id: u.id || 'Unknown',
-          name: u.name || 'Unknown',
-          points: u.Score?.network_score || 0,
-          status: u.status || 'active',
-          referralDate: u.joinedAt || 0 // Default to 0 (old) if missing, NOT Date.now()
-        };
-      });
-      console.log(`[ReferralContext] Found ${list.length} referrals via Reverse Lookup`);
+    const unsub = onValue(referralsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (!data) {
+        setInvitedFriends([]);
+        return;
+      }
+
+      const list = Object.entries(data).map(([key, val]) => {
+        // Case 1: Value is boolean 'true' (My previous temp schema) or just ID
+        if (val === true) {
+          return { id: key, name: 'Unknown', points: 0 };
+        }
+        // Case 2: Value is object { id, name, joinedAt } (New Schema)
+        if (typeof val === 'object' && val.name) {
+          return {
+            id: val.id || key,
+            name: val.name,
+            points: 50, // Static display or we could fetch real score if needed. UI shows "+50 XP" usually static.
+            status: 'active',
+            referralDate: val.joinedAt || val.timestamp || 0
+          };
+        }
+        // Case 3: Legacy array format { 1: { id: "...", name: "..." } }
+        if (typeof val === 'object' && val.id) {
+          return {
+            id: val.id,
+            name: val.name,
+            points: 50,
+            status: 'active',
+            referralDate: val.timestamp || 0
+          };
+        }
+        return null;
+      }).filter(item => item !== null);
+
+      console.log(`[ReferralContext] Loaded ${list.length} referrals from local node`);
       setInvitedFriends(list);
-    }, (error) => {
-      console.error("[ReferralContext] Error querying referrals:", error);
     });
 
     return () => unsub();
