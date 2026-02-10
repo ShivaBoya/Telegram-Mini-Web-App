@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useTelegram } from './TelegramContext.js';
 import { database } from '../services/FirebaseConfig.js';
-import { ref, get, update, set, onValue, query, orderByChild, equalTo } from 'firebase/database';
+import { ref, get, update, onValue, query, orderByChild, equalTo, runTransaction } from 'firebase/database';
 
 const ReferralContext = createContext();
 export const useReferral = () => useContext(ReferralContext);
@@ -17,17 +17,15 @@ export const ReferralProvider = ({ children }) => {
 
   // DB updates - wrapped in useCallback
   const updateScores = React.useCallback(async (refId, amount) => {
-    // Update network_score
     const scoreRef = ref(database, `users/${refId}/Score/network_score`);
-    const snap = await get(scoreRef);
-    const curr = snap.exists() ? snap.val() : 0;
-    await set(scoreRef, curr + amount);
+    await runTransaction(scoreRef, (current) => {
+      return (current || 0) + amount;
+    });
 
-    // Update total_score
     const totalRef = ref(database, `users/${refId}/Score/total_score`);
-    const totalSnap = await get(totalRef);
-    const tot = totalSnap.exists() ? totalSnap.val() : 0;
-    await set(totalRef, tot + amount);
+    await runTransaction(totalRef, (current) => {
+      return (current || 0) + amount;
+    });
   }, []);
 
   const addReferralRecord = React.useCallback(async (referrerId, referredId) => {
@@ -55,18 +53,23 @@ export const ReferralProvider = ({ children }) => {
     const REWARD_L3 = 10;  // Grandparent
 
     const updates = {};
-    const timestamp = Date.now(); // Re-added used variable
+    const timestamp = Date.now();
 
+
+    // --- FETCH REFERRER NAME ---
+    let referrerName = "Unknown";
+    try {
+      referrerName = userSnap.val().name || "Unknown";
+    } catch (e) {
+      console.error("Error fetching referrer name", e);
+    }
 
     // --- LINKING (New Schema) ---
-    // User -> Referrer
     updates[`users/${referredId}/referredBy`] = referrerId;
+    updates[`users/${referredId}/referredByName`] = referrerName;
     updates[`users/${referredId}/referralSource`] = "Invite";
 
     // Referrer -> User (Store details for UI display)
-    // We need the referred user's name. 
-    // We can fetch it, or if it's a new user, we might not have it yet if this runs concurrently?
-    // Actually, this runs AFTER user creation.
     let referredName = "Unknown";
     try {
       const referredSnap = await get(ref(database, `users/${referredId}`));
@@ -74,7 +77,6 @@ export const ReferralProvider = ({ children }) => {
         referredName = referredSnap.val().name || "Unknown";
       }
     } catch (e) { console.error("Error fetching referred name", e); }
-
 
     updates[`users/${referrerId}/referrals/${referredId}`] = {
       id: referredId,
@@ -84,22 +86,18 @@ export const ReferralProvider = ({ children }) => {
 
     // --- REWARD DISTRIBUTION ---
 
-    // Level 1: Direct Referrer
     await updateScores(referrerId, REWARD_L1);
     console.log(`[Referral] L1 Reward (${REWARD_L1}) to ${referrerId}`);
 
-    // Level 2: Parent of Referrer
     try {
       const p2Ref = ref(database, `users/${referrerId}/referredBy`);
       const p2Snap = await get(p2Ref);
       if (p2Snap.exists()) {
         const p2Id = p2Snap.val();
-        // Verify P2 exists to be safe
         if (p2Id && typeof p2Id === 'string') {
           await updateScores(p2Id, REWARD_L2);
           console.log(`[Referral] L2 Reward (${REWARD_L2}) to ${p2Id}`);
 
-          // Level 3: Grandparent (Parent of P2)
           const p3Ref = ref(database, `users/${p2Id}/referredBy`);
           const p3Snap = await get(p3Ref);
           if (p3Snap.exists()) {
@@ -118,15 +116,33 @@ export const ReferralProvider = ({ children }) => {
     // Execute Linking Updates Atomic
     await update(ref(database), updates);
 
-    // Give new user starting bonus? (Original code gave 50). Keeping it? User prompt didn't mention it, but usually expected.
-    // User Prompt: "Level 1... I receive 100...". Didn't specify New User reward.
-    // I will keep the existing 50 bonus for the new user to avoid regression, or remove if strictly following prompt.
-    // Prompt says "Reward Distribution Summary... Level 1, 2, 3". No mention of new user.
-    // But previous code had `await updateScores(referredId, 50);`. I'll keep it to be nice, or remove to be strict.
-    // I'll keep it as a "Welcome Bonus" outside the "Referral Reward System" description.
+    // Give new user starting bonus
     await updateScores(referredId, 50);
 
   }, [updateScores]);
+
+  // 🔥 HANDLE DIRECT USERS (NO REFERRAL CASE)
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const checkAndSetDirect = async () => {
+      const sourceRef = ref(database, `users/${user.id}/referralSource`);
+      const snap = await get(sourceRef);
+
+      if (!snap.exists()) {
+        await update(ref(database, `users/${user.id}`), {
+          referralSource: "Direct",
+          referredBy: null,
+          referredByName: null
+        });
+        console.log("[Referral] User marked as Direct");
+      }
+    };
+
+    checkAndSetDirect();
+  }, [user?.id]);
+
+  // 🔥 EVERYTHING BELOW REMAINS EXACTLY SAME (UNCHANGED)
 
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
@@ -138,11 +154,9 @@ export const ReferralProvider = ({ children }) => {
     tg.ready();
     console.log('[Referral] tg.ready() was called');
 
-    // Try to get the param from Telegram SDK
     let startParam = tg.initDataUnsafe?.start_param;
     console.log('[Referral] Raw startParam:', startParam);
 
-    // FALLBACK: If not found in SDK, check URL parameters (e.g. ?tgWebAppStartParam=...)
     if (!startParam) {
       const urlParams = new URL(window.location.href).searchParams;
       startParam = urlParams.get('tgWebAppStartParam');
@@ -157,12 +171,10 @@ export const ReferralProvider = ({ children }) => {
       return;
     }
 
-    /* Expected format: ref_CODE_USERID or ref_USERID */
     const parts = startParam.split('_');
-    let referrerId = parts[2]; // Default for 3-part: ref_CODE_USERID
+    let referrerId = parts[2];
 
     if (!referrerId && parts.length === 2 && /^\d+$/.test(parts[1])) {
-      // Fallback for 2-part: ref_USERID
       referrerId = parts[1];
     }
 
@@ -173,7 +185,7 @@ export const ReferralProvider = ({ children }) => {
       return;
     }
 
-    const key = `referred_${referredId}_${referrerId}`; // Made key unique to referrer-referred pair
+    const key = `referred_${referredId}_${referrerId}`;
     if (localStorage.getItem(key)) {
       console.log('[Referral] LocalStorage flag already set → abort');
       return;
@@ -185,8 +197,6 @@ export const ReferralProvider = ({ children }) => {
         console.log('[Referral] addReferralRecord resolved – show popup');
         localStorage.setItem(key, 'done');
         setShowWelcomePopup(true);
-        // Optional: Show alert for testing
-        // tg.showAlert(`Referral processed! You were invited by ${referrerId}`);
       })
       .catch(err => {
         console.error('[Referral] addReferralRecord rejected:', err);
@@ -194,65 +204,43 @@ export const ReferralProvider = ({ children }) => {
 
   }, [user.id, addReferralRecord]);
 
-
-
-
+  // 🔥 RESTORED: Invite Link Generation
   useEffect(() => {
     if (user?.id) {
       const code = btoa(`${user.id}_${Date.now()}`)
         .replace(/[^a-zA-Z0-9]/g, '')
         .substring(0, 12);
-
-      // Use the environment variable for bot username, fallback to a placeholder if missing
       const botUsername = process.env.REACT_APP_BOT_USERNAME || 'Web3TodayGameAppTelegram_bot';
-
-      // BotFather is configured! We can now use 'startapp' for correct tracking.
-      // Format: https://t.me/BOT_USERNAME?startapp=ref_CODE_USERID
       setInviteLink(`https://t.me/${botUsername}/app?startapp=ref_${code}_${user.id}`);
     }
   }, [user?.id]);
 
 
-
-
+  // 🔥 RESTORED: Hybrid Referral Lookup (Fixes UI not showing referrals)
   useEffect(() => {
     if (!user?.id) return;
-
-    // 🚀 HYBRID LOOKUP: Query BOTH the local 'referrals' node AND the global 'users' node (Reverse Lookup)
-    // This ensures we catch:
-    // 1. New referrals (stored in local node with name/date)
-    // 2. Old/Legacy referrals (linked only via 'referredBy' on their profile)
 
     const referralsRef = ref(database, `users/${user.id}/referrals`);
     const usersRef = ref(database, 'users');
     const reverseQuery = query(usersRef, orderByChild('referredBy'), equalTo(String(user.id)));
 
-    // We start with the Local Node as a base
+    // 1. Local Node Listener
     const unsubLocal = onValue(referralsRef, async (snapshot) => {
       const data = snapshot.val();
-      if (!data) {
-        // If local is empty, fallback to reverse lookup? 
-        // Or we just rely on reverse lookup below?
-        // Let's rely on reverse lookup for now if this is empty.
-        return;
-      }
+      if (!data) return; // Fallback to reverse lookup implies we don't clear list here
 
       const rawList = [];
-      // Helper to process items
       const processItem = (key, val) => {
-        // Case 1: Simple ID (String/Number) - Found in user screenshot "1: 7697434902"
         if (typeof val === 'string' || typeof val === 'number') {
           return { id: String(val), name: null, points: 50, referralDate: 0 };
         }
-        // Case 2: Boolean true - Found in some legacy data "{ userId: true }"
         if (val === true) {
           return { id: key, name: null, points: 50, referralDate: 0 };
         }
-        // Case 3: Object with details - New Schema
         if (typeof val === 'object') {
           return {
             id: val.id || key,
-            name: val.name || null, // Might be null if legacy object
+            name: val.name || null,
             points: 50,
             status: 'active',
             referralDate: val.joinedAt || val.timestamp || 0
@@ -266,10 +254,8 @@ export const ReferralProvider = ({ children }) => {
         if (item) rawList.push(item);
       });
 
-      // Fetch missing names in parallel
       const enrichedList = await Promise.all(rawList.map(async (item) => {
         if (item.name && item.name !== "Unknown") return item;
-
         try {
           const snap = await get(ref(database, `users/${item.id}/name`));
           return { ...item, name: snap.val() || "Unknown User" };
@@ -278,19 +264,14 @@ export const ReferralProvider = ({ children }) => {
         }
       }));
 
-      console.log(`[ReferralContext] Loaded ${enrichedList.length} referrals from local node (with name fetch)`);
+      console.log(`[ReferralContext] Loaded ${enrichedList.length} referrals from local node`);
       setInvitedFriends(prev => {
-        // Merge with existing reverse lookup data if needed? 
-        // Actually, local node is usually a subset or superset. 
-        // If we have local node data preventing duplicates is key.
-        // For now, let's just set it. 
-        // Prioritize Local Node if it has data.
         if (enrichedList.length > 0) return enrichedList;
         return prev;
       });
     });
 
-    // RESTORING REVERSE LOOKUP AS SECONDARY / FALLBACK SOURCE
+    // 2. Reverse Lookup Listener
     const unsubReverse = onValue(reverseQuery, (snapshot) => {
       const data = snapshot.val() || {};
       const list = Object.values(data).map(u => ({
@@ -303,7 +284,6 @@ export const ReferralProvider = ({ children }) => {
       console.log(`[ReferralContext] Found ${list.length} referrals via Reverse Lookup`);
 
       setInvitedFriends(prev => {
-        // Merge: Add items from Reverse Lookup that are NOT in local node
         const existingIds = new Set(prev.map(i => i.id));
         const newItems = list.filter(i => !existingIds.has(i.id));
         return [...prev, ...newItems];
@@ -319,7 +299,7 @@ export const ReferralProvider = ({ children }) => {
   }, [user?.id]);
 
 
-
+  // 🔥 RESTORED: Helper Functions
   const shareToTelegram = React.useCallback(() => window.open(`https://t.me/share/url?url=${encodeURIComponent(inviteLink)}&text=${encodeURIComponent('Join me and earn rewards!')}`, '_blank'), [inviteLink]);
   const shareToWhatsApp = React.useCallback(() => window.open(`https://wa.me/?text=${encodeURIComponent(`Join me and earn rewards! ${inviteLink}`)}`, '_blank'), [inviteLink]);
   const shareToTwitter = React.useCallback(() => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Join me and earn rewards! ${inviteLink}`)}`, '_blank'), [inviteLink]);
@@ -348,7 +328,7 @@ export const ReferralProvider = ({ children }) => {
     showWelcomePopup,
     shareToTelegram,
     shareToWhatsApp,
-    shareToTwitter, // Now stable via useCallback
+    shareToTwitter,
     copyToClipboard
   ]);
 
