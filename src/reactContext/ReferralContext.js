@@ -71,6 +71,20 @@ export const ReferralProvider = ({ children }) => {
     // Award: referrer 100, referred 50
     await updateScores(referrerId, 100);
     await updateScores(referredId, 50);
+
+    // Multi-Level Referral Reward (20% to the Grandparent)
+    try {
+      const parentRef = ref(database, `users/${referrerId}/referredBy/id`);
+      const parentSnap = await get(parentRef);
+      if (parentSnap.exists()) {
+        const grandParentId = parentSnap.val();
+        // 20% of 100 = 20 points
+        await updateScores(grandParentId, 20);
+        console.log(`[ReferralContext] Awarded 20 points to Grandparent: ${grandParentId}`);
+      }
+    } catch (err) {
+      console.error("[ReferralContext] Error processing multi-level reward:", err);
+    }
   }, [updateScores]);
 
   useEffect(() => {
