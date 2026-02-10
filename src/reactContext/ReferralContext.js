@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useTelegram } from './TelegramContext.js';
 import { database } from '../services/FirebaseConfig.js';
-import { ref, get, update, set, onValue } from 'firebase/database';
+import { ref, get, update, set, onValue, query, orderByChild, equalTo } from 'firebase/database';
 
 const ReferralContext = createContext();
 export const useReferral = () => useContext(ReferralContext);
@@ -218,50 +218,38 @@ export const ReferralProvider = ({ children }) => {
   useEffect(() => {
     if (!user?.id) return;
 
-    // 🚀 UPDATED LOOKUP: Query the user's OWN 'referrals' node
-    // This expects the 'referrals' node to contain objects: { [id]: { name: "...", joinedAt: ... } } (New Schema)
-    // OR it might contain legacy data: { [id]: true } or array { 1: { id: ..., name: ... } }
-    // We must handle both.
+    // 🚀 HYBRID LOOKUP: Query BOTH the local 'referrals' node AND the global 'users' node (Reverse Lookup)
+    // This ensures we catch:
+    // 1. New referrals (stored in local node with name/date)
+    // 2. Old/Legacy referrals (linked only via 'referredBy' on their profile)
 
-    const referralsRef = ref(database, `users/${user.id}/referrals`);
+    // 🚀 HYBRID LOOKUP: Query BOTH the local 'referrals' node AND the global 'users' node (Reverse Lookup)
+    // This ensures we catch:
+    // 1. New referrals (stored in local node with name/date)
+    // 2. Old/Legacy referrals (linked only via 'referredBy' on their profile)
 
-    const unsub = onValue(referralsRef, (snapshot) => {
-      const data = snapshot.val();
-      if (!data) {
-        setInvitedFriends([]);
-        return;
-      }
+    // const referralsRef = ref(database, `users/${user.id}/referrals`); // Unused variable removed
 
-      const list = Object.entries(data).map(([key, val]) => {
-        // Case 1: Value is boolean 'true' (My previous temp schema) or just ID
-        if (val === true) {
-          return { id: key, name: 'Unknown', points: 0 };
-        }
-        // Case 2: Value is object { id, name, joinedAt } (New Schema)
-        if (typeof val === 'object' && val.name) {
-          return {
-            id: val.id || key,
-            name: val.name,
-            points: 50, // Static display or we could fetch real score if needed. UI shows "+50 XP" usually static.
-            status: 'active',
-            referralDate: val.joinedAt || val.timestamp || 0
-          };
-        }
-        // Case 3: Legacy array format { 1: { id: "...", name: "..." } }
-        if (typeof val === 'object' && val.id) {
-          return {
-            id: val.id,
-            name: val.name,
-            points: 50,
-            status: 'active',
-            referralDate: val.timestamp || 0
-          };
-        }
-        return null;
-      }).filter(item => item !== null);
+    const usersRef = ref(database, 'users');
+    const reverseQuery = query(usersRef, orderByChild('referredBy'), equalTo(String(user.id)));
 
-      console.log(`[ReferralContext] Loaded ${list.length} referrals from local node`);
+    // normalizeReferral Removed - Not used in pure reverse lookup logic below
+
+    // RESTORING REVERSE LOOKUP AS PRIMARY SOURCE OF TRUTH
+    const unsub = onValue(reverseQuery, (snapshot) => {
+      const data = snapshot.val() || {};
+      const list = Object.values(data).map(u => ({
+        id: u.id || 'Unknown',
+        name: u.name || 'Unknown',
+        points: u.Score?.network_score || 0,
+        status: u.status || 'active',
+        referralDate: u.joinedAt || 0
+      }));
+      console.log(`[ReferralContext] Found ${list.length} referrals via Reverse Lookup`);
       setInvitedFriends(list);
+    }, (error) => {
+      console.error("[ReferralContext] Error querying referrals:", error);
+      // Fallback? No, if this fails, we have bigger issues.
     });
 
     return () => unsub();
