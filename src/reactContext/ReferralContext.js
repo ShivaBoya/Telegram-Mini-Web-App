@@ -223,20 +223,75 @@ export const ReferralProvider = ({ children }) => {
     // 1. New referrals (stored in local node with name/date)
     // 2. Old/Legacy referrals (linked only via 'referredBy' on their profile)
 
-    // 🚀 HYBRID LOOKUP: Query BOTH the local 'referrals' node AND the global 'users' node (Reverse Lookup)
-    // This ensures we catch:
-    // 1. New referrals (stored in local node with name/date)
-    // 2. Old/Legacy referrals (linked only via 'referredBy' on their profile)
-
-    // const referralsRef = ref(database, `users/${user.id}/referrals`); // Unused variable removed
-
+    const referralsRef = ref(database, `users/${user.id}/referrals`);
     const usersRef = ref(database, 'users');
     const reverseQuery = query(usersRef, orderByChild('referredBy'), equalTo(String(user.id)));
 
-    // normalizeReferral Removed - Not used in pure reverse lookup logic below
+    // We start with the Local Node as a base
+    const unsubLocal = onValue(referralsRef, async (snapshot) => {
+      const data = snapshot.val();
+      if (!data) {
+        // If local is empty, fallback to reverse lookup? 
+        // Or we just rely on reverse lookup below?
+        // Let's rely on reverse lookup for now if this is empty.
+        return;
+      }
 
-    // RESTORING REVERSE LOOKUP AS PRIMARY SOURCE OF TRUTH
-    const unsub = onValue(reverseQuery, (snapshot) => {
+      const rawList = [];
+      // Helper to process items
+      const processItem = (key, val) => {
+        // Case 1: Simple ID (String/Number) - Found in user screenshot "1: 7697434902"
+        if (typeof val === 'string' || typeof val === 'number') {
+          return { id: String(val), name: null, points: 50, referralDate: 0 };
+        }
+        // Case 2: Boolean true - Found in some legacy data "{ userId: true }"
+        if (val === true) {
+          return { id: key, name: null, points: 50, referralDate: 0 };
+        }
+        // Case 3: Object with details - New Schema
+        if (typeof val === 'object') {
+          return {
+            id: val.id || key,
+            name: val.name || null, // Might be null if legacy object
+            points: 50,
+            status: 'active',
+            referralDate: val.joinedAt || val.timestamp || 0
+          };
+        }
+        return null;
+      };
+
+      Object.entries(data).forEach(([key, val]) => {
+        const item = processItem(key, val);
+        if (item) rawList.push(item);
+      });
+
+      // Fetch missing names in parallel
+      const enrichedList = await Promise.all(rawList.map(async (item) => {
+        if (item.name && item.name !== "Unknown") return item;
+
+        try {
+          const snap = await get(ref(database, `users/${item.id}/name`));
+          return { ...item, name: snap.val() || "Unknown User" };
+        } catch (e) {
+          return { ...item, name: "Unknown" };
+        }
+      }));
+
+      console.log(`[ReferralContext] Loaded ${enrichedList.length} referrals from local node (with name fetch)`);
+      setInvitedFriends(prev => {
+        // Merge with existing reverse lookup data if needed? 
+        // Actually, local node is usually a subset or superset. 
+        // If we have local node data preventing duplicates is key.
+        // For now, let's just set it. 
+        // Prioritize Local Node if it has data.
+        if (enrichedList.length > 0) return enrichedList;
+        return prev;
+      });
+    });
+
+    // RESTORING REVERSE LOOKUP AS SECONDARY / FALLBACK SOURCE
+    const unsubReverse = onValue(reverseQuery, (snapshot) => {
       const data = snapshot.val() || {};
       const list = Object.values(data).map(u => ({
         id: u.id || 'Unknown',
@@ -246,13 +301,21 @@ export const ReferralProvider = ({ children }) => {
         referralDate: u.joinedAt || 0
       }));
       console.log(`[ReferralContext] Found ${list.length} referrals via Reverse Lookup`);
-      setInvitedFriends(list);
+
+      setInvitedFriends(prev => {
+        // Merge: Add items from Reverse Lookup that are NOT in local node
+        const existingIds = new Set(prev.map(i => i.id));
+        const newItems = list.filter(i => !existingIds.has(i.id));
+        return [...prev, ...newItems];
+      });
     }, (error) => {
       console.error("[ReferralContext] Error querying referrals:", error);
-      // Fallback? No, if this fails, we have bigger issues.
     });
 
-    return () => unsub();
+    return () => {
+      unsubLocal();
+      unsubReverse();
+    };
   }, [user?.id]);
 
 
