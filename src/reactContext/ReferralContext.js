@@ -27,7 +27,7 @@ export const ReferralProvider = ({ children }) => {
   const [showWelcomePopup, setShowWelcomePopup] = useState(false);
 
   // 🔥 DEV TEST MODE (TURN OFF IN PRODUCTION)
-  const DEV_FORCE_REFERRAL = true;
+  const DEV_FORCE_REFERRAL = false;
   const DEV_REFERRER_ID = "6743986736"; // your ID for testing
 
   // ======================================
@@ -79,7 +79,7 @@ export const ReferralProvider = ({ children }) => {
 
     if (!referrerSnap.exists() || !referredSnap.exists()) return;
 
-    // Prevent duplicate referral (Relaxed Check)
+    // Prevent duplicate referral (Strict Check)
     const alreadyReferred = await get(
       ref(database, `users/${referredId}/referredBy`)
     );
@@ -87,12 +87,12 @@ export const ReferralProvider = ({ children }) => {
     if (alreadyReferred.exists()) {
       const existing = alreadyReferred.val();
       if (existing?.id === String(referrerId)) {
-        console.log("Already referred by same user. Skipping.");
+        console.log("Referral already processed for this referrer. Skipping.");
         return;
       }
       // If referred by someone else, we technically could allow overwriting or block.
       // For now, blocking to respect "first referrer wins" usually, but user asked to check logic.
-      console.log("Referred by someone else. Skipping.");
+      console.log("User already referred by someone else. Skipping.");
       return;
     }
 

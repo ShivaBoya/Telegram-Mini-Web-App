@@ -177,13 +177,13 @@
 // };
 
 import { database } from "../services/FirebaseConfig";
-import { ref, get, set } from "firebase/database";
+import { ref, get, set, update } from "firebase/database";
 
 export const initializeUser = async (user) => {
   if (!user) return null;
 
   const userId = String(user.id);
-  const userName = user.first_name || "Anonymous";
+  // const userName = user.first_name || "Anonymous"; // Unused
   const todayUTC = new Date().toISOString().split("T")[0];
 
   const userRef = ref(database, `users/${userId}`);
@@ -270,26 +270,14 @@ export const initializeUser = async (user) => {
 
     await set(userRef, newUser);
 
-    // =============================
-    // LINK TO REFERRER SAFELY
-    // =============================
-    if (referrerId) {
-
-      const referralNode = ref(database, `users/${referrerId}/referrals/${userId}`);
-      const existingLink = await get(referralNode);
-
-      // Prevent duplicate linking
-      if (!existingLink.exists()) {
-        await set(referralNode, {
-          id: userId,
-          name: userName,
-          joinedAt: Date.now(),
-        });
-      }
-    }
-
-    console.log("✅ User created:", userId, referralSource);
+    return newUser;
   }
 
-  return userId;
+  // Update last activity
+  await update(userRef, {
+    lastUpdated: Date.now(),
+    "streak/lastLoginDate": new Date().toISOString().split('T')[0]
+  });
+
+  return snapshot.val();
 };
