@@ -40,7 +40,7 @@ const InviteModal = ({ isOpen, onClose }) => {
     if (success) {
       setCopied(true)
       if (tg?.showPopup) {
-         tg.showPopup({ title: "Success", message: "Invite link copied!", buttons: [{ type: "ok" }] })
+        tg.showPopup({ title: "Success", message: "Invite link copied!", buttons: [{ type: "ok" }] })
       }
       setTimeout(() => setCopied(false), 2000)
     }

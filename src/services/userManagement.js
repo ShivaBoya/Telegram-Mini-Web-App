@@ -176,18 +176,21 @@
 //   }
 // };
 
-
-
 import { database } from "../services/FirebaseConfig";
 import { ref, get, update, set } from "firebase/database";
 
-export const initializeUser = async (user, startParam) => {
+export const initializeUser = async (user) => {
   if (!user) {
     console.error("User data not available");
     return null;
   }
 
   const userId = user?.id?.toString();
+  if (!userId) {
+    console.error("Invalid user ID");
+    return null;
+  }
+
   const userName = user?.first_name || "Anonymous";
   const todayUTC = new Date().toISOString().split("T")[0];
 
@@ -200,28 +203,11 @@ export const initializeUser = async (user, startParam) => {
     // 🚀 NEW USER CREATION
     // =====================================================
     if (!snapshot.exists()) {
-
-      const effectiveStartParam =
-        startParam || window.Telegram?.WebApp?.initDataUnsafe?.start_param;
-
-      let referralSource = "Direct";
-      // let referrerId = null; // Removed unused
-      // let referredByData = null; // Removed unused
-
-      // 🔎 Extract referrer ID (Checking only for logging, logic moved to ReferralContext)
-      /* 
-       * Unused referrerId logic removed to fix linter warning.
-       * ReferralContext handles the extraction and linking now.
-       */
-
-      // =====================================================
-      // 🆕 STEP 1: CREATE USER FIRST
-      // =====================================================
       await set(userRef, {
         name: userName,
+        joinedAt: Date.now(),
         lastUpdated: Date.now(),
         lastPlayed: Date.now(),
-        joinedAt: Date.now(),
         lastReset: { daily: todayUTC },
         Score: {
           farming_score: 0,
@@ -238,20 +224,14 @@ export const initializeUser = async (user, startParam) => {
           lastStreakCheckDateUTC: todayUTC,
           longestStreakCount: 1,
         },
-        referralSource: referralSource,
+        referralSource: "Direct", // Default — ReferralContext may override to "Invite"
       });
 
       console.log("✅ New user created:", userId);
-
-      // =====================================================
-      // 🤝 STEP 2: HANDLE REFERRAL - DELEGATED TO REFERRALCONTEXT
-      // =====================================================
-      // Logic removed here to ensure atomic linking + rewarding in ReferralContext.js
-      // This prevents race conditions where links are created without rewards.
     }
 
     // =====================================================
-    // 🔄 EXISTING USER PATCH
+    // 🔄 EXISTING USER PATCH (NON-DESTRUCTIVE)
     // =====================================================
     else {
       const userData = snapshot.val();
