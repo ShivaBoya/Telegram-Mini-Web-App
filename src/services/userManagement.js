@@ -228,38 +228,47 @@ export const initializeUser = async (user) => {
   // NEW USER CREATION
   // =============================
   if (!snapshot.exists()) {
-
-    const newUserData = {
-      name: userName,
-      joinedAt: Date.now(),
-      lastUpdated: Date.now(),
-      lastPlayed: Date.now(),
-      lastReset: { daily: todayUTC },
+    const newUser = {
+      id: userId,
+      username: user.username || "Anonymous",
+      first_name: user.first_name || "",
+      last_name: user.last_name || "",
+      name:
+        (user.first_name || "") +
+        (user.last_name ? " " + user.last_name : "") ||
+        user.username ||
+        "Anonymous",
+      is_premium: user.is_premium || false,
+      photo_url: user.photo_url || "",
+      language_code: user.language_code || "en",
       Score: {
         farming_score: 0,
-        network_score: 0,
+        network_score: 100, // 🔥 FIRST TIME BONUS
         game_score: 0,
         news_score: 0,
         task_score: 0,
-        total_score: 0,
+        total_score: 100, // 🔥 MATCHES NETWORK SCORE
         game_highest_score: 0,
         no_of_tickets: 3,
       },
       streak: {
-        currentStreakCount: 1,
-        lastStreakCheckDateUTC: todayUTC,
-        longestStreakCount: 1,
+        count: 0,
+        lastLoginDate: "",
       },
-      referralSource,
+      joinedAt: Date.now(),
+      lastUpdated: Date.now(), // Added from original newUserData
+      lastPlayed: Date.now(), // Added from original newUserData
+      lastReset: { daily: todayUTC }, // Added from original newUserData
+      referralSource, // Added from original newUserData
     };
 
     if (referrerId) {
-      newUserData.referredBy = {
+      newUser.referredBy = {
         id: referrerId,
       };
     }
 
-    await set(userRef, newUserData);
+    await set(userRef, newUser);
 
     // =============================
     // LINK TO REFERRER SAFELY

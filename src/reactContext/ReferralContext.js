@@ -79,13 +79,20 @@ export const ReferralProvider = ({ children }) => {
 
     if (!referrerSnap.exists() || !referredSnap.exists()) return;
 
-    // Prevent duplicate referral
+    // Prevent duplicate referral (Relaxed Check)
     const alreadyReferred = await get(
       ref(database, `users/${referredId}/referredBy`)
     );
 
     if (alreadyReferred.exists()) {
-      console.log("User already referred. Skipping.");
+      const existing = alreadyReferred.val();
+      if (existing?.id === String(referrerId)) {
+        console.log("Already referred by same user. Skipping.");
+        return;
+      }
+      // If referred by someone else, we technically could allow overwriting or block.
+      // For now, blocking to respect "first referrer wins" usually, but user asked to check logic.
+      console.log("Referred by someone else. Skipping.");
       return;
     }
 
@@ -107,7 +114,8 @@ export const ReferralProvider = ({ children }) => {
     updates[`users/${referrerId}/referrals/${referredId}`] = {
       id: String(referredId),
       joinedAt: timestamp,
-      xp: 50 // Friend's reward shown in list
+      xp: 50, // Friend's reward shown in list
+      status: 'active' // 🔥 Active Status
     };
 
     await update(ref(database), updates);
@@ -228,11 +236,24 @@ export const ReferralProvider = ({ children }) => {
 
           const userData = snap.exists() ? snap.val() : null;
 
+          // Calcluate Active Status (Logged in within last 3 days)
+          let status = "inactive";
+          if (userData?.lastPlayed) {
+            const threeDays = 3 * 24 * 60 * 60 * 1000;
+            if (Date.now() - userData.lastPlayed < threeDays) {
+              status = "active";
+            }
+          } else if (val?.status) {
+            // Fallback to stored status
+            status = val.status;
+          }
+
           return {
             id: referredId,
             name: userData?.name || "Unknown",
             referralDate: val?.joinedAt || 0,
-            xp: val?.xp || 50
+            xp: val?.xp || 50,
+            status: status
           };
         })
       );
