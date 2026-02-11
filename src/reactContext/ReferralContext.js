@@ -178,8 +178,9 @@ export const ReferralProvider = ({ children }) => {
       .substring(0, 12);
 
     setInviteLink(
-      `https://t.me/${botUsername}/app?startapp=ref_${code}_${user.id}`
+      `https://t.me/${botUsername}?startapp=ref_${code}_${user.id}`
     );
+
 
   }, [user?.id]);
 
