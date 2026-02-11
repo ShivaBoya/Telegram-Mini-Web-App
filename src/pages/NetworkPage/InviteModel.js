@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react"
 import { useReferral } from "../../reactContext/ReferralContext"
+import { useTelegram } from "../../reactContext/TelegramContext"
 
 const InviteModal = ({ isOpen, onClose }) => {
   const { inviteLink, shareToTelegram, copyToClipboard } = useReferral()
   const [copied, setCopied] = useState(false)
-
-  const tg = window.Telegram?.WebApp
+  const { tg } = useTelegram()
 
   // Close modal when Escape key is pressed
   useEffect(() => {
