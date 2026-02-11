@@ -1,5 +1,3 @@
-// src/reactContext/ReferralContext.js
-
 import React, {
   createContext,
   useContext,
@@ -30,7 +28,7 @@ export const ReferralProvider = ({ children }) => {
 
   // 🔥 DEV TEST MODE (TURN OFF IN PRODUCTION)
   const DEV_FORCE_REFERRAL = true;
-  const DEV_REFERRER_ID = "6743986736"; // 🔥 PUT YOUR OWN ID HERE
+  const DEV_REFERRER_ID = "6743986736"; // your ID for testing
 
   // ======================================
   // SAFE SCORE UPDATE
@@ -55,6 +53,7 @@ export const ReferralProvider = ({ children }) => {
 
     if (!referrerSnap.exists() || !referredSnap.exists()) return;
 
+    // Prevent duplicate referral
     const alreadyReferred = await get(
       ref(database, `users/${referredId}/referredBy`)
     );
@@ -66,9 +65,11 @@ export const ReferralProvider = ({ children }) => {
 
     const referrerName = referrerSnap.val().name || "Unknown";
 
+    const timestamp = Date.now();
+
     const updates = {};
 
-    // 🔹 Set referredBy as OBJECT (consistent structure)
+    // Save referral structure
     updates[`users/${referredId}/referredBy`] = {
       id: String(referrerId),
       name: referrerName
@@ -76,19 +77,20 @@ export const ReferralProvider = ({ children }) => {
 
     updates[`users/${referredId}/referralSource`] = "Invite";
 
-    // 🔹 Add to referrer's referrals list
+    // Store inside referrer
     updates[`users/${referrerId}/referrals/${referredId}`] = {
       id: String(referredId),
-      joinedAt: Date.now()
+      joinedAt: timestamp,
+      xp: 100 // Level 1 reward
     };
 
     await update(ref(database), updates);
 
-    // 🔹 LEVEL 1
+    // LEVEL 1
     await updateScores(referrerId, 100);
     await updateScores(referredId, 50);
 
-    // 🔹 LEVEL 2 & 3
+    // LEVEL 2 & 3
     const parentData = referrerSnap.val().referredBy;
 
     if (parentData?.id) {
@@ -120,23 +122,16 @@ export const ReferralProvider = ({ children }) => {
     tg.ready();
 
     const processReferral = async () => {
-
       let startParam = tg.initDataUnsafe?.start_param;
 
-      // 🔥 FORCE DEV REFERRAL
+      // 🔥 DEV FORCE REFERRAL
       if (DEV_FORCE_REFERRAL && !startParam) {
         startParam = `ref_test_${DEV_REFERRER_ID}`;
-      }
-
-      if (!startParam) {
-        const urlParams = new URL(window.location.href).searchParams;
-        startParam = urlParams.get("tgWebAppStartParam");
       }
 
       const currentUserId = String(user.id);
 
       if (startParam && startParam.startsWith("ref_")) {
-
         const parts = startParam.split("_");
 
         if (parts.length >= 3) {
@@ -148,7 +143,7 @@ export const ReferralProvider = ({ children }) => {
         }
       }
 
-      // Only set Direct if nothing exists
+      // Only set Direct if referralSource doesn't exist
       const sourceSnap = await get(
         ref(database, `users/${currentUserId}/referralSource`)
       );
@@ -162,10 +157,10 @@ export const ReferralProvider = ({ children }) => {
 
     processReferral();
 
-  }, [user?.id, addReferralRecord, DEV_FORCE_REFERRAL, DEV_REFERRER_ID]);
+  }, [user?.id, addReferralRecord]);
 
   // ======================================
-  // GENERATE INVITE LINK
+  // GENERATE INVITE LINK (CORRECT MINI APP LINK)
   // ======================================
   useEffect(() => {
     if (!user?.id) return;
@@ -177,15 +172,15 @@ export const ReferralProvider = ({ children }) => {
       .replace(/[^a-zA-Z0-9]/g, "")
       .substring(0, 12);
 
+    // ✅ Correct Mini App Link
     setInviteLink(
       `https://t.me/${botUsername}?startapp=ref_${code}_${user.id}`
     );
 
-
   }, [user?.id]);
 
   // ======================================
-  // REFERRAL LIST (NO MORE UNKNOWN BUG)
+  // REFERRAL LIST (NO UNKNOWN + XP SUPPORT)
   // ======================================
   useEffect(() => {
     if (!user?.id) return;
@@ -193,7 +188,6 @@ export const ReferralProvider = ({ children }) => {
     const referralsRef = ref(database, `users/${user.id}/referrals`);
 
     const unsubscribe = onValue(referralsRef, async (snapshot) => {
-
       const data = snapshot.val();
 
       if (!data) {
@@ -202,16 +196,17 @@ export const ReferralProvider = ({ children }) => {
       }
 
       const list = await Promise.all(
-        Object.keys(data).map(async (referredId) => {
+        Object.entries(data).map(async ([referredId, val]) => {
 
           const snap = await get(ref(database, `users/${referredId}`));
 
+          const userData = snap.exists() ? snap.val() : null;
+
           return {
             id: referredId,
-            name: snap.exists()
-              ? snap.val().name || "Unknown"
-              : "Unknown",
-            referralDate: data[referredId]?.joinedAt || 0
+            name: userData?.name || "Unknown",
+            referralDate: val?.joinedAt || 0,
+            xp: val?.xp || 100
           };
         })
       );
