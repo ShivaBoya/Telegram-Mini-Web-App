@@ -81,7 +81,7 @@ export const ReferralProvider = ({ children }) => {
     updates[`users/${referrerId}/referrals/${referredId}`] = {
       id: String(referredId),
       joinedAt: timestamp,
-      xp: 100 // Level 1 reward
+      xp: 50 // Friend's reward shown in list
     };
 
     await update(ref(database), updates);
@@ -206,7 +206,7 @@ export const ReferralProvider = ({ children }) => {
             id: referredId,
             name: userData?.name || "Unknown",
             referralDate: val?.joinedAt || 0,
-            xp: val?.xp || 100
+            xp: val?.xp || 50
           };
         })
       );
