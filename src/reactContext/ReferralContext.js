@@ -3,7 +3,16 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useTelegram } from './TelegramContext.js';
 import { database } from '../services/FirebaseConfig.js';
-import { ref, get, update, onValue, query, orderByChild, equalTo, runTransaction } from 'firebase/database';
+import {
+  ref,
+  get,
+  update,
+  onValue,
+  query,
+  orderByChild,
+  equalTo,
+  runTransaction
+} from 'firebase/database';
 
 const ReferralContext = createContext();
 export const useReferral = () => useContext(ReferralContext);
@@ -39,11 +48,13 @@ export const ReferralProvider = ({ children }) => {
     const userSnap = await get(referrerUserRef);
     if (!userSnap.exists()) return;
 
-    // 🔥 Duplicate protection (disabled in DEV_MODE)
-    const duplicateCheck = await get(ref(database, `users/${referredId}/referredBy`));
+    // Duplicate protection (disabled in DEV_MODE)
+    const duplicateCheck = await get(
+      ref(database, `users/${referredId}/referredBy`)
+    );
 
     if (!DEV_MODE && duplicateCheck.exists()) {
-      console.log("[Referral] Duplicate detected. Skipping.");
+      console.log('[Referral] Duplicate detected. Skipping.');
       return;
     }
 
@@ -54,19 +65,19 @@ export const ReferralProvider = ({ children }) => {
     const updates = {};
     const timestamp = Date.now();
 
-    const referrerName = userSnap.val().name || "Unknown";
+    const referrerName = userSnap.val().name || 'Unknown';
 
     updates[`users/${referredId}/referredBy`] = referrerId;
     updates[`users/${referredId}/referredByName`] = referrerName;
-    updates[`users/${referredId}/referralSource`] = "Invite";
+    updates[`users/${referredId}/referralSource`] = 'Invite';
 
     const referredSnap = await get(ref(database, `users/${referredId}`));
     const referredName = referredSnap.exists()
-      ? referredSnap.val().name || "Unknown"
-      : "Unknown";
+      ? referredSnap.val().name || 'Unknown'
+      : 'Unknown';
 
     updates[`users/${referrerId}/referrals/${referredId}`] = {
-      id: referredId,
+      id: String(referredId),
       name: referredName,
       joinedAt: timestamp
     };
@@ -77,24 +88,27 @@ export const ReferralProvider = ({ children }) => {
     // Rewards
     await updateScores(referrerId, REWARD_L1);
 
-    const p2Snap = await get(ref(database, `users/${referrerId}/referredBy`));
+    const p2Snap = await get(
+      ref(database, `users/${referrerId}/referredBy`)
+    );
     if (p2Snap.exists()) {
-      const p2Id = p2Snap.val();
+      const p2Id = String(p2Snap.val());
       await updateScores(p2Id, REWARD_L2);
 
-      const p3Snap = await get(ref(database, `users/${p2Id}/referredBy`));
+      const p3Snap = await get(
+        ref(database, `users/${p2Id}/referredBy`)
+      );
       if (p3Snap.exists()) {
-        const p3Id = p3Snap.val();
+        const p3Id = String(p3Snap.val());
         await updateScores(p3Id, REWARD_L3);
       }
     }
 
     await updateScores(referredId, 50);
-
   }, [updateScores, DEV_MODE]);
 
   // =========================
-  // SINGLE CONTROLLED EFFECT
+  // INVITE OR DIRECT HANDLER
   // =========================
   useEffect(() => {
     if (!user?.id) return;
@@ -115,7 +129,7 @@ export const ReferralProvider = ({ children }) => {
       const referredId = tg.initDataUnsafe?.user?.id;
       if (!referredId) return;
 
-      // ===== INVITE CASE =====
+      // INVITE CASE
       if (startParam) {
         const parts = startParam.split('_');
         let referrerId = parts[2];
@@ -127,6 +141,7 @@ export const ReferralProvider = ({ children }) => {
         if (!referrerId || referrerId === String(referredId)) return;
 
         const key = `referred_${referredId}_${referrerId}`;
+
         if (!DEV_MODE && localStorage.getItem(key)) return;
 
         await addReferralRecord(referrerId, referredId);
@@ -135,11 +150,13 @@ export const ReferralProvider = ({ children }) => {
         return;
       }
 
-      // ===== DIRECT CASE =====
-      const sourceSnap = await get(ref(database, `users/${user.id}/referralSource`));
+      // DIRECT CASE
+      const sourceSnap = await get(
+        ref(database, `users/${user.id}/referralSource`)
+      );
       if (!sourceSnap.exists()) {
         await update(ref(database, `users/${user.id}`), {
-          referralSource: "Direct",
+          referralSource: 'Direct',
           referredBy: null,
           referredByName: null
         });
@@ -168,13 +185,14 @@ export const ReferralProvider = ({ children }) => {
   }, [user?.id]);
 
   // =========================
-  // REFERRAL LIST
+  // REFERRAL LIST (FIXED)
   // =========================
   useEffect(() => {
     if (!user?.id) return;
 
     const referralsRef = ref(database, `users/${user.id}/referrals`);
     const usersRef = ref(database, 'users');
+
     const reverseQuery = query(
       usersRef,
       orderByChild('referredBy'),
@@ -183,16 +201,23 @@ export const ReferralProvider = ({ children }) => {
 
     const unsubLocal = onValue(referralsRef, async (snapshot) => {
       const data = snapshot.val();
-      if (!data) return;
+      if (!data) {
+        setInvitedFriends([]);
+        return;
+      }
 
       const list = await Promise.all(
         Object.entries(data).map(async ([key, val]) => {
-          const id = val.id || key;
-          const snap = await get(ref(database, `users/${id}/name`));
+          const id = val?.id ? String(val.id) : String(key);
+
+          const userSnap = await get(ref(database, `users/${id}`));
+
           return {
             id,
-            name: snap.val() || "Unknown User",
-            referralDate: val.joinedAt || 0
+            name: userSnap.exists()
+              ? userSnap.val().name || 'Unknown'
+              : 'Unknown',
+            referralDate: val?.joinedAt || 0
           };
         })
       );
