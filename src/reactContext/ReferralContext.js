@@ -33,12 +33,38 @@ export const ReferralProvider = ({ children }) => {
   // ======================================
   // SAFE SCORE UPDATE
   // ======================================
+  // ======================================
+  // SAFE SCORE UPDATE (TRANSACTION ON USER)
+  // ======================================
   const updateScores = useCallback(async (userId, amount) => {
-    const networkRef = ref(database, `users/${userId}/Score/network_score`);
-    const totalRef = ref(database, `users/${userId}/Score/total_score`);
+    const userRef = ref(database, `users/${userId}`);
 
-    await runTransaction(networkRef, (current) => (current || 0) + amount);
-    await runTransaction(totalRef, (current) => (current || 0) + amount);
+    try {
+      await runTransaction(userRef, (userData) => {
+        if (!userData) return userData;
+
+        if (!userData.Score) {
+          userData.Score = {
+            farming_score: 0,
+            network_score: 0,
+            game_score: 0,
+            news_score: 0,
+            task_score: 0,
+            total_score: 0,
+            game_highest_score: 0,
+            no_of_tickets: 3,
+          };
+        }
+
+        userData.Score.network_score = (userData.Score.network_score || 0) + amount;
+        userData.Score.total_score = (userData.Score.total_score || 0) + amount;
+
+        return userData;
+      });
+      console.log(`Updated scores for ${userId} by +${amount}`);
+    } catch (error) {
+      console.error("Transaction failed: ", error);
+    }
   }, []);
 
   // ======================================
