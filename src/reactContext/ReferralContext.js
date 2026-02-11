@@ -1,6 +1,13 @@
 // src/reactContext/ReferralContext.js
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback
+} from "react";
+
 import { useTelegram } from "./TelegramContext.js";
 import { database } from "../services/FirebaseConfig.js";
 import {
@@ -21,9 +28,13 @@ export const ReferralProvider = ({ children }) => {
   const [invitedFriends, setInvitedFriends] = useState([]);
   const [showWelcomePopup, setShowWelcomePopup] = useState(false);
 
-  // ==========================================
+  // 🔥 DEV TEST MODE (TURN OFF IN PRODUCTION)
+  const DEV_FORCE_REFERRAL = true;
+  const DEV_REFERRER_ID = "6743986736"; // 🔥 PUT YOUR OWN ID HERE
+
+  // ======================================
   // SAFE SCORE UPDATE
-  // ==========================================
+  // ======================================
   const updateScores = useCallback(async (userId, amount) => {
     const networkRef = ref(database, `users/${userId}/Score/network_score`);
     const totalRef = ref(database, `users/${userId}/Score/total_score`);
@@ -32,27 +43,32 @@ export const ReferralProvider = ({ children }) => {
     await runTransaction(totalRef, (current) => (current || 0) + amount);
   }, []);
 
-  // ==========================================
+  // ======================================
   // ADD REFERRAL RECORD
-  // ==========================================
+  // ======================================
   const addReferralRecord = useCallback(async (referrerId, referredId) => {
-
     if (!referrerId || !referredId) return;
     if (String(referrerId) === String(referredId)) return;
 
     const referrerSnap = await get(ref(database, `users/${referrerId}`));
     const referredSnap = await get(ref(database, `users/${referredId}`));
 
-    if (!referrerSnap.exists()) return;
-    if (!referredSnap.exists()) return;
+    if (!referrerSnap.exists() || !referredSnap.exists()) return;
 
-    const alreadyReferred = await get(ref(database, `users/${referredId}/referredBy`));
-    if (alreadyReferred.exists()) return;
+    const alreadyReferred = await get(
+      ref(database, `users/${referredId}/referredBy`)
+    );
+
+    if (alreadyReferred.exists()) {
+      console.log("User already referred. Skipping.");
+      return;
+    }
 
     const referrerName = referrerSnap.val().name || "Unknown";
 
     const updates = {};
 
+    // 🔹 Set referredBy as OBJECT (consistent structure)
     updates[`users/${referredId}/referredBy`] = {
       id: String(referrerId),
       name: referrerName
@@ -60,6 +76,7 @@ export const ReferralProvider = ({ children }) => {
 
     updates[`users/${referredId}/referralSource`] = "Invite";
 
+    // 🔹 Add to referrer's referrals list
     updates[`users/${referrerId}/referrals/${referredId}`] = {
       id: String(referredId),
       joinedAt: Date.now()
@@ -67,28 +84,33 @@ export const ReferralProvider = ({ children }) => {
 
     await update(ref(database), updates);
 
-    // LEVEL 1
+    // 🔹 LEVEL 1
     await updateScores(referrerId, 100);
     await updateScores(referredId, 50);
 
-    // LEVEL 2
-    const parent = referrerSnap.val().referredBy;
-    if (parent?.id) {
-      await updateScores(parent.id, 20);
+    // 🔹 LEVEL 2 & 3
+    const parentData = referrerSnap.val().referredBy;
 
-      const grandSnap = await get(ref(database, `users/${parent.id}`));
-      const grand = grandSnap.val()?.referredBy;
+    if (parentData?.id) {
+      await updateScores(parentData.id, 20);
 
-      if (grand?.id) {
-        await updateScores(grand.id, 10);
+      const grandSnap = await get(
+        ref(database, `users/${parentData.id}`)
+      );
+
+      const grandData = grandSnap.val()?.referredBy;
+
+      if (grandData?.id) {
+        await updateScores(grandData.id, 10);
       }
     }
 
+    console.log("Referral completed successfully.");
   }, [updateScores]);
 
-  // ==========================================
+  // ======================================
   // HANDLE INVITE / DIRECT
-  // ==========================================
+  // ======================================
   useEffect(() => {
     if (!user?.id) return;
 
@@ -100,6 +122,11 @@ export const ReferralProvider = ({ children }) => {
     const processReferral = async () => {
 
       let startParam = tg.initDataUnsafe?.start_param;
+
+      // 🔥 FORCE DEV REFERRAL
+      if (DEV_FORCE_REFERRAL && !startParam) {
+        startParam = `ref_test_${DEV_REFERRER_ID}`;
+      }
 
       if (!startParam) {
         const urlParams = new URL(window.location.href).searchParams;
@@ -121,8 +148,10 @@ export const ReferralProvider = ({ children }) => {
         }
       }
 
-      // Only set Direct if referralSource not already set
-      const sourceSnap = await get(ref(database, `users/${currentUserId}/referralSource`));
+      // Only set Direct if nothing exists
+      const sourceSnap = await get(
+        ref(database, `users/${currentUserId}/referralSource`)
+      );
 
       if (!sourceSnap.exists()) {
         await update(ref(database, `users/${currentUserId}`), {
@@ -133,11 +162,11 @@ export const ReferralProvider = ({ children }) => {
 
     processReferral();
 
-  }, [user?.id, addReferralRecord]);
+  }, [user?.id, addReferralRecord, DEV_FORCE_REFERRAL, DEV_REFERRER_ID]);
 
-  // ==========================================
+  // ======================================
   // GENERATE INVITE LINK
-  // ==========================================
+  // ======================================
   useEffect(() => {
     if (!user?.id) return;
 
@@ -154,9 +183,9 @@ export const ReferralProvider = ({ children }) => {
 
   }, [user?.id]);
 
-  // ==========================================
-  // REFERRAL LIST (NAME FIXED)
-  // ==========================================
+  // ======================================
+  // REFERRAL LIST (NO MORE UNKNOWN BUG)
+  // ======================================
   useEffect(() => {
     if (!user?.id) return;
 
@@ -187,16 +216,15 @@ export const ReferralProvider = ({ children }) => {
       );
 
       setInvitedFriends(list);
-
     });
 
     return () => unsubscribe();
 
   }, [user?.id]);
 
-  // ==========================================
+  // ======================================
   // SHARE HELPERS
-  // ==========================================
+  // ======================================
   const copyToClipboard = useCallback(async () => {
     try {
       if (inviteLink) {
@@ -204,42 +232,27 @@ export const ReferralProvider = ({ children }) => {
         return true;
       }
     } catch (err) {
-      console.error("Failed to copy:", err);
+      console.error(err);
     }
     return false;
   }, [inviteLink]);
 
   const shareToTelegram = useCallback(() => {
     if (!inviteLink) return;
-    const url = `https://t.me/share/url?url=${encodeURIComponent(inviteLink)}&text=${encodeURIComponent("Join me and earn rewards!")}`;
-    const tg = window.Telegram?.WebApp;
-    if (tg?.openTelegramLink) {
-      tg.openTelegramLink(url);
-    } else {
-      window.open(url, "_blank");
-    }
+    const url = `https://t.me/share/url?url=${encodeURIComponent(inviteLink)}`;
+    window.open(url, "_blank");
   }, [inviteLink]);
 
   const shareToWhatsApp = useCallback(() => {
     if (!inviteLink) return;
-    const url = `https://wa.me/?text=${encodeURIComponent(`Join me and earn rewards! ${inviteLink}`)}`;
-    const tg = window.Telegram?.WebApp;
-    if (tg?.openLink) {
-      tg.openLink(url);
-    } else {
-      window.open(url, "_blank");
-    }
+    const url = `https://wa.me/?text=${encodeURIComponent(inviteLink)}`;
+    window.open(url, "_blank");
   }, [inviteLink]);
 
   const shareToTwitter = useCallback(() => {
     if (!inviteLink) return;
-    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(`Join me and earn rewards! ${inviteLink}`)}`;
-    const tg = window.Telegram?.WebApp;
-    if (tg?.openLink) {
-      tg.openLink(url);
-    } else {
-      window.open(url, "_blank");
-    }
+    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(inviteLink)}`;
+    window.open(url, "_blank");
   }, [inviteLink]);
 
   const value = {
