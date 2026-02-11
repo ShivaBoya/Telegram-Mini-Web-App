@@ -177,102 +177,110 @@
 // };
 
 import { database } from "../services/FirebaseConfig";
-import { ref, get, update, set } from "firebase/database";
+import { ref, get, set } from "firebase/database";
 
 export const initializeUser = async (user) => {
-  if (!user) {
-    console.error("User data not available");
-    return null;
-  }
+  if (!user) return null;
 
-  const userId = user?.id?.toString();
-  if (!userId) {
-    console.error("Invalid user ID");
-    return null;
-  }
-
-  const userName = user?.first_name || "Anonymous";
+  const userId = String(user.id);
+  const userName = user.first_name || "Anonymous";
   const todayUTC = new Date().toISOString().split("T")[0];
 
   const userRef = ref(database, `users/${userId}`);
+  const snapshot = await get(userRef);
 
-  try {
-    const snapshot = await get(userRef);
+  // =============================
+  // WAIT FOR TELEGRAM READY
+  // =============================
+  const tg = window.Telegram?.WebApp;
+  tg?.ready();
 
-    // =====================================================
-    // 🚀 NEW USER CREATION
-    // =====================================================
-    if (!snapshot.exists()) {
-      await set(userRef, {
-        name: userName,
-        joinedAt: Date.now(),
-        lastUpdated: Date.now(),
-        lastPlayed: Date.now(),
-        lastReset: { daily: todayUTC },
-        Score: {
-          farming_score: 0,
-          network_score: 0,
-          game_score: 0,
-          news_score: 0,
-          task_score: 0,
-          total_score: 0,
-          game_highest_score: 0,
-          no_of_tickets: 3,
-        },
-        streak: {
-          currentStreakCount: 1,
-          lastStreakCheckDateUTC: todayUTC,
-          longestStreakCount: 1,
-        },
-        referralSource: "Direct", // Default — ReferralContext may override to "Invite"
-      });
+  let startParam = tg?.initDataUnsafe?.start_param;
 
-      console.log("✅ New user created:", userId);
-    }
-
-    // =====================================================
-    // 🔄 EXISTING USER PATCH (NON-DESTRUCTIVE)
-    // =====================================================
-    else {
-      const userData = snapshot.val();
-      const updates = {};
-
-      if (!userData.lastReset) {
-        updates.lastReset = { daily: todayUTC };
-      }
-
-      if (!userData.streak) {
-        updates.streak = {
-          currentStreakCount: 1,
-          lastStreakCheckDateUTC: todayUTC,
-          longestStreakCount: 1,
-        };
-      }
-
-      if (!userData.Score) {
-        updates.Score = {
-          farming_score: 0,
-          network_score: 0,
-          game_score: 0,
-          news_score: 0,
-          task_score: 0,
-          total_score: 0,
-          game_highest_score: 0,
-          no_of_tickets: 3,
-        };
-      }
-
-      if (Object.keys(updates).length > 0) {
-        await update(userRef, updates);
-        console.log("🛠 User patched:", userId);
-      } else {
-        console.log("User already exists:", userId);
-      }
-    }
-
-    return userId;
-  } catch (error) {
-    console.error("Error initializing user:", error);
-    return null;
+  if (!startParam) {
+    const urlParams = new URL(window.location.href).searchParams;
+    startParam = urlParams.get("tgWebAppStartParam");
   }
+
+  let referralSource = "Direct";
+  let referrerId = null;
+
+  if (startParam) {
+    const parts = startParam.split("_");
+
+    if (parts.length >= 3 && parts[0] === "ref") {
+      referrerId = parts[2];
+    }
+
+    if (referrerId && referrerId !== userId) {
+      // Validate referrer exists
+      const referrerSnap = await get(ref(database, `users/${referrerId}`));
+
+      if (referrerSnap.exists()) {
+        referralSource = "Invite";
+      } else {
+        referrerId = null; // invalid referrer
+      }
+    }
+  }
+
+  // =============================
+  // NEW USER CREATION
+  // =============================
+  if (!snapshot.exists()) {
+
+    const newUserData = {
+      name: userName,
+      joinedAt: Date.now(),
+      lastUpdated: Date.now(),
+      lastPlayed: Date.now(),
+      lastReset: { daily: todayUTC },
+      Score: {
+        farming_score: 0,
+        network_score: 0,
+        game_score: 0,
+        news_score: 0,
+        task_score: 0,
+        total_score: 0,
+        game_highest_score: 0,
+        no_of_tickets: 3,
+      },
+      streak: {
+        currentStreakCount: 1,
+        lastStreakCheckDateUTC: todayUTC,
+        longestStreakCount: 1,
+      },
+      referralSource,
+    };
+
+    if (referrerId) {
+      newUserData.referredBy = {
+        id: referrerId,
+      };
+    }
+
+    await set(userRef, newUserData);
+
+    // =============================
+    // LINK TO REFERRER SAFELY
+    // =============================
+    if (referrerId) {
+
+      const referralNode = ref(database, `users/${referrerId}/referrals/${userId}`);
+      const existingLink = await get(referralNode);
+
+      // Prevent duplicate linking
+      if (!existingLink.exists()) {
+        await set(referralNode, {
+          id: userId,
+          name: userName,
+          joinedAt: Date.now(),
+        });
+      }
+    }
+
+    console.log("✅ User created:", userId, referralSource);
+  }
+
+  return userId;
 };

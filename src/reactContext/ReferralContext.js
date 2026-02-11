@@ -1,18 +1,15 @@
 // src/reactContext/ReferralContext.js
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useTelegram } from './TelegramContext.js';
-import { database } from '../services/FirebaseConfig.js';
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { useTelegram } from "./TelegramContext.js";
+import { database } from "../services/FirebaseConfig.js";
 import {
   ref,
   get,
   update,
   onValue,
-  query,
-  orderByChild,
-  equalTo,
   runTransaction
-} from 'firebase/database';
+} from "firebase/database";
 
 const ReferralContext = createContext();
 export const useReferral = () => useContext(ReferralContext);
@@ -20,96 +17,78 @@ export const useReferral = () => useContext(ReferralContext);
 export const ReferralProvider = ({ children }) => {
   const { user } = useTelegram();
 
-  const [inviteLink, setInviteLink] = useState('');
+  const [inviteLink, setInviteLink] = useState("");
   const [invitedFriends, setInvitedFriends] = useState([]);
   const [showWelcomePopup, setShowWelcomePopup] = useState(false);
 
-  // 🔥 DEV MODE (TURN OFF AFTER TESTING)
-  const DEV_MODE = true;
-
-  // =========================
+  // ==========================================
   // SAFE SCORE UPDATE
-  // =========================
-  const updateScores = React.useCallback(async (refId, amount) => {
-    const scoreRef = ref(database, `users/${refId}/Score/network_score`);
-    await runTransaction(scoreRef, (current) => (current || 0) + amount);
+  // ==========================================
+  const updateScores = useCallback(async (userId, amount) => {
+    const networkRef = ref(database, `users/${userId}/Score/network_score`);
+    const totalRef = ref(database, `users/${userId}/Score/total_score`);
 
-    const totalRef = ref(database, `users/${refId}/Score/total_score`);
+    await runTransaction(networkRef, (current) => (current || 0) + amount);
     await runTransaction(totalRef, (current) => (current || 0) + amount);
   }, []);
 
-  // =========================
+  // ==========================================
   // ADD REFERRAL RECORD
-  // =========================
-  const addReferralRecord = React.useCallback(async (referrerId, referredId) => {
-    console.log(`[Referral] Processing: ${referrerId} -> ${referredId}`);
+  // ==========================================
+  const addReferralRecord = useCallback(async (referrerId, referredId) => {
 
-    const referrerUserRef = ref(database, `users/${referrerId}`);
-    const userSnap = await get(referrerUserRef);
-    if (!userSnap.exists()) return;
+    if (!referrerId || !referredId) return;
+    if (String(referrerId) === String(referredId)) return;
 
-    // Duplicate protection (disabled in DEV_MODE)
-    const duplicateCheck = await get(
-      ref(database, `users/${referredId}/referredBy`)
-    );
+    const referrerSnap = await get(ref(database, `users/${referrerId}`));
+    const referredSnap = await get(ref(database, `users/${referredId}`));
 
-    if (!DEV_MODE && duplicateCheck.exists()) {
-      console.log('[Referral] Duplicate detected. Skipping.');
-      return;
-    }
+    if (!referrerSnap.exists()) return;
+    if (!referredSnap.exists()) return;
 
-    const REWARD_L1 = 100;
-    const REWARD_L2 = 20;
-    const REWARD_L3 = 10;
+    const alreadyReferred = await get(ref(database, `users/${referredId}/referredBy`));
+    if (alreadyReferred.exists()) return;
+
+    const referrerName = referrerSnap.val().name || "Unknown";
 
     const updates = {};
-    const timestamp = Date.now();
 
-    const referrerName = userSnap.val().name || 'Unknown';
+    updates[`users/${referredId}/referredBy`] = {
+      id: String(referrerId),
+      name: referrerName
+    };
 
-    updates[`users/${referredId}/referredBy`] = referrerId;
-    updates[`users/${referredId}/referredByName`] = referrerName;
-    updates[`users/${referredId}/referralSource`] = 'Invite';
-
-    const referredSnap = await get(ref(database, `users/${referredId}`));
-    const referredName = referredSnap.exists()
-      ? referredSnap.val().name || 'Unknown'
-      : 'Unknown';
+    updates[`users/${referredId}/referralSource`] = "Invite";
 
     updates[`users/${referrerId}/referrals/${referredId}`] = {
       id: String(referredId),
-      name: referredName,
-      joinedAt: timestamp
+      joinedAt: Date.now()
     };
 
-    // Link first
     await update(ref(database), updates);
 
-    // Rewards
-    await updateScores(referrerId, REWARD_L1);
+    // LEVEL 1
+    await updateScores(referrerId, 100);
+    await updateScores(referredId, 50);
 
-    const p2Snap = await get(
-      ref(database, `users/${referrerId}/referredBy`)
-    );
-    if (p2Snap.exists()) {
-      const p2Id = String(p2Snap.val());
-      await updateScores(p2Id, REWARD_L2);
+    // LEVEL 2
+    const parent = referrerSnap.val().referredBy;
+    if (parent?.id) {
+      await updateScores(parent.id, 20);
 
-      const p3Snap = await get(
-        ref(database, `users/${p2Id}/referredBy`)
-      );
-      if (p3Snap.exists()) {
-        const p3Id = String(p3Snap.val());
-        await updateScores(p3Id, REWARD_L3);
+      const grandSnap = await get(ref(database, `users/${parent.id}`));
+      const grand = grandSnap.val()?.referredBy;
+
+      if (grand?.id) {
+        await updateScores(grand.id, 10);
       }
     }
 
-    await updateScores(referredId, 50);
-  }, [updateScores, DEV_MODE]);
+  }, [updateScores]);
 
-  // =========================
-  // INVITE OR DIRECT HANDLER
-  // =========================
+  // ==========================================
+  // HANDLE INVITE / DIRECT
+  // ==========================================
   useEffect(() => {
     if (!user?.id) return;
 
@@ -118,119 +97,101 @@ export const ReferralProvider = ({ children }) => {
 
     tg.ready();
 
-    const process = async () => {
+    const processReferral = async () => {
+
       let startParam = tg.initDataUnsafe?.start_param;
 
       if (!startParam) {
         const urlParams = new URL(window.location.href).searchParams;
-        startParam = urlParams.get('tgWebAppStartParam');
+        startParam = urlParams.get("tgWebAppStartParam");
       }
 
-      const referredId = tg.initDataUnsafe?.user?.id;
-      if (!referredId) return;
+      const currentUserId = String(user.id);
 
-      // INVITE CASE
-      if (startParam) {
-        const parts = startParam.split('_');
-        let referrerId = parts[2];
+      if (startParam && startParam.startsWith("ref_")) {
 
-        if (!referrerId && parts.length === 2 && /^\d+$/.test(parts[1])) {
-          referrerId = parts[1];
+        const parts = startParam.split("_");
+
+        if (parts.length >= 3) {
+          const referrerId = parts[2];
+
+          await addReferralRecord(String(referrerId), currentUserId);
+          setShowWelcomePopup(true);
+          return;
         }
-
-        if (!referrerId || referrerId === String(referredId)) return;
-
-        const key = `referred_${referredId}_${referrerId}`;
-
-        if (!DEV_MODE && localStorage.getItem(key)) return;
-
-        await addReferralRecord(referrerId, referredId);
-        localStorage.setItem(key, 'done');
-        setShowWelcomePopup(true);
-        return;
       }
 
-      // DIRECT CASE
-      const sourceSnap = await get(
-        ref(database, `users/${user.id}/referralSource`)
-      );
+      // Only set Direct if referralSource not already set
+      const sourceSnap = await get(ref(database, `users/${currentUserId}/referralSource`));
+
       if (!sourceSnap.exists()) {
-        await update(ref(database, `users/${user.id}`), {
-          referralSource: 'Direct',
-          referredBy: null,
-          referredByName: null
+        await update(ref(database, `users/${currentUserId}`), {
+          referralSource: "Direct"
         });
       }
     };
 
-    process();
-  }, [user?.id, addReferralRecord, DEV_MODE]);
+    processReferral();
 
-  // =========================
-  // INVITE LINK
-  // =========================
+  }, [user?.id, addReferralRecord]);
+
+  // ==========================================
+  // GENERATE INVITE LINK
+  // ==========================================
   useEffect(() => {
-    if (user?.id) {
-      const code = btoa(`${user.id}_${Date.now()}`)
-        .replace(/[^a-zA-Z0-9]/g, '')
-        .substring(0, 12);
+    if (!user?.id) return;
 
-      const botUsername =
-        process.env.REACT_APP_BOT_USERNAME || 'Web3TodayGameAppTelegram_bot';
+    const botUsername =
+      process.env.REACT_APP_BOT_USERNAME || "Web3TodayGameAppTelegram_bot";
 
-      setInviteLink(
-        `https://t.me/${botUsername}/app?startapp=ref_${code}_${user.id}`
-      );
-    }
+    const code = btoa(`${user.id}_${Date.now()}`)
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .substring(0, 12);
+
+    setInviteLink(
+      `https://t.me/${botUsername}/app?startapp=ref_${code}_${user.id}`
+    );
+
   }, [user?.id]);
 
-  // =========================
-  // REFERRAL LIST (FIXED)
-  // =========================
+  // ==========================================
+  // REFERRAL LIST (NAME FIXED)
+  // ==========================================
   useEffect(() => {
     if (!user?.id) return;
 
     const referralsRef = ref(database, `users/${user.id}/referrals`);
-    const usersRef = ref(database, 'users');
 
-    const reverseQuery = query(
-      usersRef,
-      orderByChild('referredBy'),
-      equalTo(String(user.id))
-    );
+    const unsubscribe = onValue(referralsRef, async (snapshot) => {
 
-    const unsubLocal = onValue(referralsRef, async (snapshot) => {
       const data = snapshot.val();
+
       if (!data) {
         setInvitedFriends([]);
         return;
       }
 
       const list = await Promise.all(
-        Object.entries(data).map(async ([key, val]) => {
-          const id = val?.id ? String(val.id) : String(key);
+        Object.keys(data).map(async (referredId) => {
 
-          const userSnap = await get(ref(database, `users/${id}`));
+          const snap = await get(ref(database, `users/${referredId}`));
 
           return {
-            id,
-            name: userSnap.exists()
-              ? userSnap.val().name || 'Unknown'
-              : 'Unknown',
-            referralDate: val?.joinedAt || 0
+            id: referredId,
+            name: snap.exists()
+              ? snap.val().name || "Unknown"
+              : "Unknown",
+            referralDate: data[referredId]?.joinedAt || 0
           };
         })
       );
 
       setInvitedFriends(list);
+
     });
 
-    const unsubReverse = onValue(reverseQuery, () => { });
+    return () => unsubscribe();
 
-    return () => {
-      unsubLocal();
-      unsubReverse();
-    };
   }, [user?.id]);
 
   const value = {
