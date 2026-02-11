@@ -157,7 +157,7 @@ export const ReferralProvider = ({ children }) => {
 
     processReferral();
 
-  }, [user?.id, addReferralRecord]);
+  }, [user?.id, addReferralRecord, DEV_FORCE_REFERRAL, DEV_REFERRER_ID]);
 
   // ======================================
   // GENERATE INVITE LINK (CORRECT MINI APP LINK)

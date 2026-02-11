@@ -306,7 +306,7 @@ export default function NetworkComponent() {
                           <span className="text-white font-medium">{friend.name}</span>
                         </div>
                         <div className="flex items-center gap-1 text-amber-300 font-bold text-sm">
-                          +{friend.points} XP
+                          +{friend.xp} XP
                         </div>
                       </div>
                     ))}
