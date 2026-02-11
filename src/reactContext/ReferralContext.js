@@ -1,3 +1,5 @@
+// src/reactContext/ReferralContext.js
+
 import React, {
   createContext,
   useContext,
@@ -26,15 +28,14 @@ export const ReferralProvider = ({ children }) => {
   const [invitedFriends, setInvitedFriends] = useState([]);
   const [showWelcomePopup, setShowWelcomePopup] = useState(false);
 
-  // 🔥 DEV TEST MODE (TURN OFF IN PRODUCTION)
-  const DEV_FORCE_REFERRAL = false;
-  const DEV_REFERRER_ID = "6743986736"; // your ID for testing
+  // 🔥 ==============================
+  // 🔥 DEV CONFIG (TURN OFF IN PROD)
+  // 🔥 ==============================
+  const DEV_FORCE_REFERRAL = true;      // 🔥 set false in production
+  const DEV_REFERRER_ID = "6743986736"; // 🔥 your Telegram ID
 
   // ======================================
-  // SAFE SCORE UPDATE
-  // ======================================
-  // ======================================
-  // SAFE SCORE UPDATE (TRANSACTION ON USER)
+  // SAFE SCORE UPDATE (TRANSACTION SAFE)
   // ======================================
   const updateScores = useCallback(async (userId, amount) => {
     const userRef = ref(database, `users/${userId}`);
@@ -56,14 +57,18 @@ export const ReferralProvider = ({ children }) => {
           };
         }
 
-        userData.Score.network_score = (userData.Score.network_score || 0) + amount;
-        userData.Score.total_score = (userData.Score.total_score || 0) + amount;
+        userData.Score.network_score =
+          (userData.Score.network_score || 0) + amount;
+
+        userData.Score.total_score =
+          (userData.Score.total_score || 0) + amount;
 
         return userData;
       });
-      console.log(`Updated scores for ${userId} by +${amount}`);
+
+      console.log(`✅ +${amount} added to ${userId}`);
     } catch (error) {
-      console.error("Transaction failed: ", error);
+      console.error("❌ Transaction failed:", error);
     }
   }, []);
 
@@ -72,37 +77,33 @@ export const ReferralProvider = ({ children }) => {
   // ======================================
   const addReferralRecord = useCallback(async (referrerId, referredId) => {
     if (!referrerId || !referredId) return;
-    if (String(referrerId) === String(referredId)) return;
+    if (String(referrerId) === String(referredId)) {
+      console.log("❌ Self referral blocked");
+      return;
+    }
 
     const referrerSnap = await get(ref(database, `users/${referrerId}`));
     const referredSnap = await get(ref(database, `users/${referredId}`));
 
-    if (!referrerSnap.exists() || !referredSnap.exists()) return;
+    if (!referrerSnap.exists() || !referredSnap.exists()) {
+      console.log("❌ Referrer or referred user not found");
+      return;
+    }
 
-    // Prevent duplicate referral (Strict Check)
     const alreadyReferred = await get(
       ref(database, `users/${referredId}/referredBy`)
     );
 
     if (alreadyReferred.exists()) {
-      const existing = alreadyReferred.val();
-      if (existing?.id === String(referrerId)) {
-        console.log("Referral already processed for this referrer. Skipping.");
-        return;
-      }
-      // If referred by someone else, we technically could allow overwriting or block.
-      // For now, blocking to respect "first referrer wins" usually, but user asked to check logic.
-      console.log("User already referred by someone else. Skipping.");
+      console.log("⚠️ Referral already processed");
       return;
     }
 
     const referrerName = referrerSnap.val().name || "Unknown";
 
+    const updates = {};
     const timestamp = Date.now();
 
-    const updates = {};
-
-    // Save referral structure
     updates[`users/${referredId}/referredBy`] = {
       id: String(referrerId),
       name: referrerName
@@ -110,38 +111,35 @@ export const ReferralProvider = ({ children }) => {
 
     updates[`users/${referredId}/referralSource`] = "Invite";
 
-    // Store inside referrer
     updates[`users/${referrerId}/referrals/${referredId}`] = {
       id: String(referredId),
       joinedAt: timestamp,
-      xp: 50, // Friend's reward shown in list
-      status: 'active' // 🔥 Active Status
+      xp: 50
     };
 
     await update(ref(database), updates);
 
-    // LEVEL 1
+    // 🔥 LEVEL 1
     await updateScores(referrerId, 100);
     await updateScores(referredId, 50);
 
-    // LEVEL 2 & 3
-    const parentData = referrerSnap.val().referredBy;
-
-    if (parentData?.id) {
-      await updateScores(parentData.id, 20);
+    // 🔥 LEVEL 2
+    const parent = referrerSnap.val().referredBy;
+    if (parent?.id) {
+      await updateScores(parent.id, 20);
 
       const grandSnap = await get(
-        ref(database, `users/${parentData.id}`)
+        ref(database, `users/${parent.id}`)
       );
 
-      const grandData = grandSnap.val()?.referredBy;
+      const grand = grandSnap.val()?.referredBy;
 
-      if (grandData?.id) {
-        await updateScores(grandData.id, 10);
+      if (grand?.id) {
+        await updateScores(grand.id, 10);
       }
     }
 
-    console.log("Referral completed successfully.");
+    console.log("🎉 Referral completed");
   }, [updateScores]);
 
   // ======================================
@@ -158,9 +156,10 @@ export const ReferralProvider = ({ children }) => {
     const processReferral = async () => {
       let startParam = tg.initDataUnsafe?.start_param;
 
-      // 🔥 DEV FORCE REFERRAL
-      if (DEV_FORCE_REFERRAL && !startParam) {
-        startParam = `ref_test_${DEV_REFERRER_ID}`;
+      // 🔥 DEV FORCE MODE
+      if (!startParam && DEV_FORCE_REFERRAL) {
+        startParam = `ref_dev_${DEV_REFERRER_ID}`;
+        console.log("🔥 DEV referral forced");
       }
 
       const currentUserId = String(user.id);
@@ -171,13 +170,16 @@ export const ReferralProvider = ({ children }) => {
         if (parts.length >= 3) {
           const referrerId = parts[2];
 
-          await addReferralRecord(String(referrerId), currentUserId);
+          await addReferralRecord(
+            String(referrerId),
+            currentUserId
+          );
+
           setShowWelcomePopup(true);
           return;
         }
       }
 
-      // Only set Direct if referralSource doesn't exist
       const sourceSnap = await get(
         ref(database, `users/${currentUserId}/referralSource`)
       );
@@ -190,31 +192,29 @@ export const ReferralProvider = ({ children }) => {
     };
 
     processReferral();
-
-  }, [user?.id, addReferralRecord, DEV_FORCE_REFERRAL, DEV_REFERRER_ID]);
+  }, [user?.id, addReferralRecord]);
 
   // ======================================
-  // GENERATE INVITE LINK (CORRECT MINI APP LINK)
+  // GENERATE INVITE LINK
   // ======================================
   useEffect(() => {
     if (!user?.id) return;
 
     const botUsername =
-      process.env.REACT_APP_BOT_USERNAME || "Web3TodayGameAppTelegram_bot";
+      process.env.REACT_APP_BOT_USERNAME ||
+      "Web3TodayGameAppTelegram_bot";
 
     const code = btoa(`${user.id}_${Date.now()}`)
       .replace(/[^a-zA-Z0-9]/g, "")
       .substring(0, 12);
 
-    // ✅ Correct Mini App Link
     setInviteLink(
       `https://t.me/${botUsername}?startapp=ref_${code}_${user.id}`
     );
-
   }, [user?.id]);
 
   // ======================================
-  // REFERRAL LIST (NO UNKNOWN + XP SUPPORT)
+  // REFERRAL LIST
   // ======================================
   useEffect(() => {
     if (!user?.id) return;
@@ -230,30 +230,15 @@ export const ReferralProvider = ({ children }) => {
       }
 
       const list = await Promise.all(
-        Object.entries(data).map(async ([referredId, val]) => {
-
-          const snap = await get(ref(database, `users/${referredId}`));
-
+        Object.entries(data).map(async ([id, val]) => {
+          const snap = await get(ref(database, `users/${id}`));
           const userData = snap.exists() ? snap.val() : null;
 
-          // Calcluate Active Status (Logged in within last 3 days)
-          let status = "inactive";
-          if (userData?.lastPlayed) {
-            const threeDays = 3 * 24 * 60 * 60 * 1000;
-            if (Date.now() - userData.lastPlayed < threeDays) {
-              status = "active";
-            }
-          } else if (val?.status) {
-            // Fallback to stored status
-            status = val.status;
-          }
-
           return {
-            id: referredId,
+            id,
             name: userData?.name || "Unknown",
             referralDate: val?.joinedAt || 0,
-            xp: val?.xp || 50,
-            status: status
+            xp: val?.xp || 50
           };
         })
       );
@@ -262,40 +247,39 @@ export const ReferralProvider = ({ children }) => {
     });
 
     return () => unsubscribe();
-
   }, [user?.id]);
 
   // ======================================
   // SHARE HELPERS
   // ======================================
   const copyToClipboard = useCallback(async () => {
-    try {
-      if (inviteLink) {
-        await navigator.clipboard.writeText(inviteLink);
-        return true;
-      }
-    } catch (err) {
-      console.error(err);
-    }
-    return false;
+    if (!inviteLink) return false;
+    await navigator.clipboard.writeText(inviteLink);
+    return true;
   }, [inviteLink]);
 
   const shareToTelegram = useCallback(() => {
     if (!inviteLink) return;
-    const url = `https://t.me/share/url?url=${encodeURIComponent(inviteLink)}`;
-    window.open(url, "_blank");
+    window.open(
+      `https://t.me/share/url?url=${encodeURIComponent(inviteLink)}`,
+      "_blank"
+    );
   }, [inviteLink]);
 
   const shareToWhatsApp = useCallback(() => {
     if (!inviteLink) return;
-    const url = `https://wa.me/?text=${encodeURIComponent(inviteLink)}`;
-    window.open(url, "_blank");
+    window.open(
+      `https://wa.me/?text=${encodeURIComponent(inviteLink)}`,
+      "_blank"
+    );
   }, [inviteLink]);
 
   const shareToTwitter = useCallback(() => {
     if (!inviteLink) return;
-    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(inviteLink)}`;
-    window.open(url, "_blank");
+    window.open(
+      `https://twitter.com/intent/tweet?text=${encodeURIComponent(inviteLink)}`,
+      "_blank"
+    );
   }, [inviteLink]);
 
   const value = {
