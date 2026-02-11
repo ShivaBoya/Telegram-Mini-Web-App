@@ -28,122 +28,120 @@ export const ReferralProvider = ({ children }) => {
   const [invitedFriends, setInvitedFriends] = useState([]);
   const [showWelcomePopup, setShowWelcomePopup] = useState(false);
 
-  // 🔥 ==============================
-  // 🔥 DEV CONFIG (TURN OFF IN PROD)
-  // 🔥 ==============================
-  const DEV_FORCE_REFERRAL = true;      // 🔥 set false in production
-  const DEV_REFERRER_ID = "6743986736"; // 🔥 your Telegram ID
+  // ==============================
+  // DEV MODE (TURN OFF IN PROD)
+  // ==============================
+  const DEV_FORCE_REFERRAL = false;
+  const DEV_REFERRER_ID = "6743986736";
 
   // ======================================
-  // SAFE SCORE UPDATE (TRANSACTION SAFE)
+  // SAFE SCORE UPDATE (FULL USER TXN)
   // ======================================
   const updateScores = useCallback(async (userId, amount) => {
     const userRef = ref(database, `users/${userId}`);
 
-    try {
-      await runTransaction(userRef, (userData) => {
-        if (!userData) return userData;
+    await runTransaction(userRef, (data) => {
+      if (!data) return data;
 
-        if (!userData.Score) {
-          userData.Score = {
-            farming_score: 0,
-            network_score: 0,
-            game_score: 0,
-            news_score: 0,
-            task_score: 0,
-            total_score: 0,
-            game_highest_score: 0,
-            no_of_tickets: 3,
-          };
-        }
+      if (!data.Score) {
+        data.Score = {
+          farming_score: 0,
+          network_score: 0,
+          game_score: 0,
+          news_score: 0,
+          task_score: 0,
+          total_score: 0,
+          game_highest_score: 0,
+          no_of_tickets: 3,
+        };
+      }
 
-        userData.Score.network_score =
-          (userData.Score.network_score || 0) + amount;
+      data.Score.network_score =
+        (data.Score.network_score || 0) + amount;
 
-        userData.Score.total_score =
-          (userData.Score.total_score || 0) + amount;
+      data.Score.total_score =
+        (data.Score.total_score || 0) + amount;
 
-        return userData;
-      });
-
-      console.log(`✅ +${amount} added to ${userId}`);
-    } catch (error) {
-      console.error("❌ Transaction failed:", error);
-    }
+      return data;
+    });
   }, []);
 
   // ======================================
-  // ADD REFERRAL RECORD
+  // MAIN REFERRAL LOGIC (ONLY HERE)
   // ======================================
-  const addReferralRecord = useCallback(async (referrerId, referredId) => {
-    if (!referrerId || !referredId) return;
-    if (String(referrerId) === String(referredId)) {
-      console.log("❌ Self referral blocked");
-      return;
-    }
+  const processReferralReward = useCallback(
+    async (referrerId, newUserId) => {
+      if (!referrerId || !newUserId) return;
+      if (referrerId === newUserId) return;
 
-    const referrerSnap = await get(ref(database, `users/${referrerId}`));
-    const referredSnap = await get(ref(database, `users/${referredId}`));
-
-    if (!referrerSnap.exists() || !referredSnap.exists()) {
-      console.log("❌ Referrer or referred user not found");
-      return;
-    }
-
-    const alreadyReferred = await get(
-      ref(database, `users/${referredId}/referredBy`)
-    );
-
-    if (alreadyReferred.exists()) {
-      console.log("⚠️ Referral already processed");
-      return;
-    }
-
-    const referrerName = referrerSnap.val().name || "Unknown";
-
-    const updates = {};
-    const timestamp = Date.now();
-
-    updates[`users/${referredId}/referredBy`] = {
-      id: String(referrerId),
-      name: referrerName
-    };
-
-    updates[`users/${referredId}/referralSource`] = "Invite";
-
-    updates[`users/${referrerId}/referrals/${referredId}`] = {
-      id: String(referredId),
-      joinedAt: timestamp,
-      xp: 50
-    };
-
-    await update(ref(database), updates);
-
-    // 🔥 LEVEL 1
-    await updateScores(referrerId, 100);
-    await updateScores(referredId, 50);
-
-    // 🔥 LEVEL 2
-    const parent = referrerSnap.val().referredBy;
-    if (parent?.id) {
-      await updateScores(parent.id, 20);
-
-      const grandSnap = await get(
-        ref(database, `users/${parent.id}`)
+      const referrerSnap = await get(
+        ref(database, `users/${referrerId}`)
+      );
+      const newUserSnap = await get(
+        ref(database, `users/${newUserId}`)
       );
 
-      const grand = grandSnap.val()?.referredBy;
+      if (!referrerSnap.exists() || !newUserSnap.exists()) return;
 
-      if (grand?.id) {
-        await updateScores(grand.id, 10);
+      // IMPORTANT: check if already processed
+      const referredBySnap = await get(
+        ref(database, `users/${newUserId}/referredBy`)
+      );
+
+      if (referredBySnap.exists()) {
+        return; // already rewarded
       }
-    }
 
-    console.log("🎉 Referral completed");
-  }, [updateScores]);
+      const timestamp = Date.now();
+      const newUserName =
+        newUserSnap.val().name || "Unknown";
+
+      const updates = {};
+
+      // set referredBy
+      updates[`users/${newUserId}/referredBy`] = {
+        id: referrerId,
+        name: referrerSnap.val().name || "Unknown",
+      };
+
+      updates[`users/${newUserId}/referralSource`] = "Invite";
+
+      // add inside referrer
+      updates[`users/${referrerId}/referrals/${newUserId}`] = {
+        id: newUserId,
+        name: newUserName,
+        joinedAt: timestamp,
+        xp: 50,
+      };
+
+      await update(ref(database), updates);
+
+      // 🔥 LEVEL 1
+      await updateScores(referrerId, 100);
+      await updateScores(newUserId, 50);
+
+      // 🔥 LEVEL 2
+      const parent = referrerSnap.val().referredBy;
+      if (parent?.id) {
+        await updateScores(parent.id, 20);
+
+        const grandSnap = await get(
+          ref(database, `users/${parent.id}`)
+        );
+        const grand = grandSnap.val()?.referredBy;
+
+        if (grand?.id) {
+          await updateScores(grand.id, 10);
+        }
+      }
+
+      setShowWelcomePopup(true);
+    },
+    [updateScores]
+  );
 
   // ======================================
-  // HANDLE INVITE / DIRECT
+  // HANDLE START PARAM
   // ======================================
   useEffect(() => {
     if (!user?.id) return;
@@ -153,46 +151,29 @@ export const ReferralProvider = ({ children }) => {
 
     tg.ready();
 
-    const processReferral = async () => {
+    const handleReferral = async () => {
       let startParam = tg.initDataUnsafe?.start_param;
 
-      // 🔥 DEV FORCE MODE
       if (!startParam && DEV_FORCE_REFERRAL) {
         startParam = `ref_dev_${DEV_REFERRER_ID}`;
-        console.log("🔥 DEV referral forced");
       }
 
-      const currentUserId = String(user.id);
+      if (!startParam) return;
 
-      if (startParam && startParam.startsWith("ref_")) {
+      if (startParam.startsWith("ref_")) {
         const parts = startParam.split("_");
-
         if (parts.length >= 3) {
           const referrerId = parts[2];
-
-          await addReferralRecord(
-            String(referrerId),
-            currentUserId
+          await processReferralReward(
+            referrerId,
+            String(user.id)
           );
-
-          setShowWelcomePopup(true);
-          return;
         }
-      }
-
-      const sourceSnap = await get(
-        ref(database, `users/${currentUserId}/referralSource`)
-      );
-
-      if (!sourceSnap.exists()) {
-        await update(ref(database, `users/${currentUserId}`), {
-          referralSource: "Direct"
-        });
       }
     };
 
-    processReferral();
-  }, [user?.id, addReferralRecord, DEV_FORCE_REFERRAL, DEV_REFERRER_ID]);
+    handleReferral();
+  }, [user?.id, processReferralReward, DEV_FORCE_REFERRAL, DEV_REFERRER_ID]);
 
   // ======================================
   // GENERATE INVITE LINK
@@ -214,37 +195,37 @@ export const ReferralProvider = ({ children }) => {
   }, [user?.id]);
 
   // ======================================
-  // REFERRAL LIST
+  // REFERRAL LIST (NO UNKNOWN BUG)
   // ======================================
   useEffect(() => {
     if (!user?.id) return;
 
-    const referralsRef = ref(database, `users/${user.id}/referrals`);
+    const referralsRef = ref(
+      database,
+      `users/${user.id}/referrals`
+    );
 
-    const unsubscribe = onValue(referralsRef, async (snapshot) => {
-      const data = snapshot.val();
+    const unsubscribe = onValue(
+      referralsRef,
+      async (snapshot) => {
+        const data = snapshot.val();
+        if (!data) {
+          setInvitedFriends([]);
+          return;
+        }
 
-      if (!data) {
-        setInvitedFriends([]);
-        return;
+        const list = Object.values(data).map(
+          (val) => ({
+            id: val.id,
+            name: val.name || "Unknown",
+            referralDate: val.joinedAt || 0,
+            xp: val.xp || 50,
+          })
+        );
+
+        setInvitedFriends(list);
       }
-
-      const list = await Promise.all(
-        Object.entries(data).map(async ([id, val]) => {
-          const snap = await get(ref(database, `users/${id}`));
-          const userData = snap.exists() ? snap.val() : null;
-
-          return {
-            id,
-            name: userData?.name || "Unknown",
-            referralDate: val?.joinedAt || 0,
-            xp: val?.xp || 50
-          };
-        })
-      );
-
-      setInvitedFriends(list);
-    });
+    );
 
     return () => unsubscribe();
   }, [user?.id]);
@@ -252,35 +233,41 @@ export const ReferralProvider = ({ children }) => {
   // ======================================
   // SHARE HELPERS
   // ======================================
-  const copyToClipboard = useCallback(async () => {
+  const copyToClipboard = async () => {
     if (!inviteLink) return false;
     await navigator.clipboard.writeText(inviteLink);
     return true;
-  }, [inviteLink]);
+  };
 
-  const shareToTelegram = useCallback(() => {
+  const shareToTelegram = () => {
     if (!inviteLink) return;
     window.open(
-      `https://t.me/share/url?url=${encodeURIComponent(inviteLink)}`,
+      `https://t.me/share/url?url=${encodeURIComponent(
+        inviteLink
+      )}`,
       "_blank"
     );
-  }, [inviteLink]);
+  };
 
-  const shareToWhatsApp = useCallback(() => {
+  const shareToWhatsApp = () => {
     if (!inviteLink) return;
     window.open(
-      `https://wa.me/?text=${encodeURIComponent(inviteLink)}`,
+      `https://wa.me/?text=${encodeURIComponent(
+        inviteLink
+      )}`,
       "_blank"
     );
-  }, [inviteLink]);
+  };
 
-  const shareToTwitter = useCallback(() => {
+  const shareToTwitter = () => {
     if (!inviteLink) return;
     window.open(
-      `https://twitter.com/intent/tweet?text=${encodeURIComponent(inviteLink)}`,
+      `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+        inviteLink
+      )}`,
       "_blank"
     );
-  }, [inviteLink]);
+  };
 
   const value = {
     inviteLink,
@@ -290,7 +277,7 @@ export const ReferralProvider = ({ children }) => {
     copyToClipboard,
     shareToTelegram,
     shareToWhatsApp,
-    shareToTwitter
+    shareToTwitter,
   };
 
   return (

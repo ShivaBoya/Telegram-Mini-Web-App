@@ -176,6 +176,10 @@
 //   }
 // };
 
+
+
+// src/services/initializeUser.js
+
 import { database } from "../services/FirebaseConfig";
 import { ref, get, set, update } from "firebase/database";
 
@@ -183,51 +187,16 @@ export const initializeUser = async (user) => {
   if (!user) return null;
 
   const userId = String(user.id);
-  // const userName = user.first_name || "Anonymous"; // Unused
   const todayUTC = new Date().toISOString().split("T")[0];
 
   const userRef = ref(database, `users/${userId}`);
   const snapshot = await get(userRef);
 
   // =============================
-  // WAIT FOR TELEGRAM READY
-  // =============================
-  const tg = window.Telegram?.WebApp;
-  tg?.ready();
-
-  let startParam = tg?.initDataUnsafe?.start_param;
-
-  if (!startParam) {
-    const urlParams = new URL(window.location.href).searchParams;
-    startParam = urlParams.get("tgWebAppStartParam");
-  }
-
-  let referralSource = "Direct";
-  let referrerId = null;
-
-  if (startParam) {
-    const parts = startParam.split("_");
-
-    if (parts.length >= 3 && parts[0] === "ref") {
-      referrerId = parts[2];
-    }
-
-    if (referrerId && referrerId !== userId) {
-      // Validate referrer exists
-      const referrerSnap = await get(ref(database, `users/${referrerId}`));
-
-      if (referrerSnap.exists()) {
-        referralSource = "Invite";
-      } else {
-        referrerId = null; // invalid referrer
-      }
-    }
-  }
-
-  // =============================
-  // NEW USER CREATION
+  // NEW USER
   // =============================
   if (!snapshot.exists()) {
+
     const newUser = {
       id: userId,
       username: user.username || "Anonymous",
@@ -238,45 +207,50 @@ export const initializeUser = async (user) => {
         (user.last_name ? " " + user.last_name : "") ||
         user.username ||
         "Anonymous",
+
       is_premium: user.is_premium || false,
       photo_url: user.photo_url || "",
       language_code: user.language_code || "en",
+
+      // 🔥 FIRST TIME BONUS ONLY
       Score: {
         farming_score: 0,
-        network_score: 100, // 🔥 FIRST TIME BONUS
+        network_score: 100,   // first time bonus
         game_score: 0,
         news_score: 0,
         task_score: 0,
-        total_score: 100, // 🔥 MATCHES NETWORK SCORE
+        total_score: 100,     // match network
         game_highest_score: 0,
         no_of_tickets: 3,
       },
+
       streak: {
         count: 0,
-        lastLoginDate: "",
+        lastLoginDate: todayUTC,
       },
-      joinedAt: Date.now(),
-      lastUpdated: Date.now(), // Added from original newUserData
-      lastPlayed: Date.now(), // Added from original newUserData
-      lastReset: { daily: todayUTC }, // Added from original newUserData
-      referralSource, // Added from original newUserData
-    };
 
-    if (referrerId) {
-      newUser.referredBy = {
-        id: referrerId,
-      };
-    }
+      joinedAt: Date.now(),
+      lastUpdated: Date.now(),
+      lastPlayed: Date.now(),
+      lastReset: { daily: todayUTC },
+
+      // DO NOT HANDLE REFERRAL HERE
+      referralSource: "Direct"
+    };
 
     await set(userRef, newUser);
 
+    console.log("✅ New user created:", userId);
     return newUser;
   }
 
-  // Update last activity
+  // =============================
+  // EXISTING USER
+  // =============================
   await update(userRef, {
     lastUpdated: Date.now(),
-    "streak/lastLoginDate": new Date().toISOString().split('T')[0]
+    lastPlayed: Date.now(),
+    "streak/lastLoginDate": todayUTC
   });
 
   return snapshot.val();
