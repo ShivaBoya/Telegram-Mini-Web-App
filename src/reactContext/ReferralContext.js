@@ -194,11 +194,63 @@ export const ReferralProvider = ({ children }) => {
 
   }, [user?.id]);
 
+  // ==========================================
+  // SHARE HELPERS
+  // ==========================================
+  const copyToClipboard = useCallback(async () => {
+    try {
+      if (inviteLink) {
+        await navigator.clipboard.writeText(inviteLink);
+        return true;
+      }
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+    return false;
+  }, [inviteLink]);
+
+  const shareToTelegram = useCallback(() => {
+    if (!inviteLink) return;
+    const url = `https://t.me/share/url?url=${encodeURIComponent(inviteLink)}&text=${encodeURIComponent("Join me and earn rewards!")}`;
+    const tg = window.Telegram?.WebApp;
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(url);
+    } else {
+      window.open(url, "_blank");
+    }
+  }, [inviteLink]);
+
+  const shareToWhatsApp = useCallback(() => {
+    if (!inviteLink) return;
+    const url = `https://wa.me/?text=${encodeURIComponent(`Join me and earn rewards! ${inviteLink}`)}`;
+    const tg = window.Telegram?.WebApp;
+    if (tg?.openLink) {
+      tg.openLink(url);
+    } else {
+      window.open(url, "_blank");
+    }
+  }, [inviteLink]);
+
+  const shareToTwitter = useCallback(() => {
+    if (!inviteLink) return;
+    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(`Join me and earn rewards! ${inviteLink}`)}`;
+    const tg = window.Telegram?.WebApp;
+    if (tg?.openLink) {
+      tg.openLink(url);
+    } else {
+      window.open(url, "_blank");
+    }
+  }, [inviteLink]);
+
   const value = {
     inviteLink,
     invitedFriends,
     showWelcomePopup,
-    setShowWelcomePopup
+    setShowWelcomePopup,
+    copyToClipboard,
+    shareToTelegram,
+    shareToWhatsApp,
+    shareToTwitter
   };
 
   return (

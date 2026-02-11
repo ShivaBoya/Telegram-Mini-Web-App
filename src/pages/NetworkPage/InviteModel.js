@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react"
 import { useReferral } from "../../reactContext/ReferralContext"
-// import { useTelegram } from "../../reactContext/TelegramContext" // Removed unused import
+import { useTelegram } from "../../reactContext/TelegramContext"
 
 const InviteModal = ({ isOpen, onClose }) => {
   const { inviteLink, shareToTelegram, copyToClipboard } = useReferral()
   const [copied, setCopied] = useState(false)
 
-  const tg = window.Telegram?.WebApp
+  const { tg } = useTelegram()
 
   // Close modal when Escape key is pressed
   useEffect(() => {
@@ -51,6 +51,19 @@ const InviteModal = ({ isOpen, onClose }) => {
     onClose()
   }
 
+  const handleWhatsAppShare = () => {
+    const url = `https://wa.me/?text=${encodeURIComponent(
+      `Join me and earn rewards! ${inviteLink}`
+    )}`
+
+    if (tg?.openLink) {
+      tg.openLink(url)
+    } else {
+      window.open(url, "_blank")
+    }
+    onClose()
+  }
+
   return (
     <div id="inviteModal" className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
       <div className="bg-gradient-to-br bg-white/10 backdrop-blur-sm px-5 py-5 rounded-lg shadow-lg max-w-md w-full">
@@ -75,12 +88,18 @@ const InviteModal = ({ isOpen, onClose }) => {
             </div>
           )}
         </div>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <button className="bg-pink-500/20 px-3 text-white py-2 h-12 font-bold rounded hover:bg-pink-500/30 transition-colors" onClick={handleTelegramShare}>
-            Send
-          </button>
+        <div className="flex flex-col gap-3">
+          <div className="flex gap-3">
+            <button className="flex-1 bg-blue-500/20 text-white py-3 font-bold rounded hover:bg-blue-500/30 transition-colors" onClick={handleTelegramShare}>
+              Telegram
+            </button>
+            <button className="flex-1 bg-green-500/20 text-white py-3 font-bold rounded hover:bg-green-500/30 transition-colors" onClick={handleWhatsAppShare}>
+              WhatsApp
+            </button>
+          </div>
+
           <button
-            className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white py-2 h-12 font-bold rounded hover:from-indigo-600 hover:to-purple-700 transition-colors"
+            className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white py-3 font-bold rounded hover:from-indigo-600 hover:to-purple-700 transition-colors"
             onClick={handleCopy}
           >
             {copied ? "Copied!" : "Copy link"}
